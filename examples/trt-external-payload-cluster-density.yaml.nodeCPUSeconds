@@ -1,0 +1,35 @@
+tests :
+  - name : payload-cluster-density-v2
+    index: {{ es_metadata_index }}
+    benchmarkIndex: {{ es_benchmark_index }}
+    metadata:
+      platform: AWS
+      clusterType: self-managed
+      masterNodesType: m6a.xlarge
+      masterNodesCount: 3
+      workerNodesType: m6a.xlarge
+      workerNodesCount: 6
+      benchmark.keyword: cluster-density-v2
+      ocpVersion: {{ version }}
+      networkType: OVNKubernetes
+
+    metrics :
+    - name:  nodeCPUSeconds-Workers-start
+      metricName.keyword: nodeCPUSeconds-Workers-start
+      labels.mode.keyword: user
+      metric_of_interest: value
+      not:
+        jobName.keyword: "garbage-collection"
+      labels:
+        - "[Jira: perfscale]"
+      direction: 1
+
+    - name:  nodeCPUSeconds-Workers
+      metricName.keyword: nodeCPUSeconds-Workers
+      labels.mode.keyword: user
+      metric_of_interest: value
+      not:
+        jobName.keyword: "garbage-collection"
+      labels:
+        - "[Jira: perfscale]"
+      direction: 1

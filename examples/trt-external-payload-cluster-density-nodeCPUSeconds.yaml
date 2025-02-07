@@ -1,0 +1,281 @@
+tests :
+  - name : payload-cluster-density-v2
+    index: {{ es_metadata_index }}
+    benchmarkIndex: {{ es_benchmark_index }}
+    metadata:
+      platform: AWS
+      clusterType: self-managed
+      masterNodesType: m6a.xlarge
+      masterNodesCount: 3
+      workerNodesType: m6a.xlarge
+      workerNodesCount: 6
+      benchmark.keyword: cluster-density-v2
+      ocpVersion: {{ version }}
+      networkType: OVNKubernetes
+
+    metrics : 
+    - name:  podReadyLatency
+      metricName: podLatencyQuantilesMeasurement
+      quantileName: Ready
+      metric_of_interest: max
+      not: 
+        jobConfig.name: "garbage-collection"
+      labels:
+        - "[Jira: PerfScale]"
+      direction: 1
+
+    - name:  nodeCPUSeconds-Workers
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: idle
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers idle]"
+      direction: 1
+    - name:  nodeCPUSeconds-Workers
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: idle
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers idle]"
+      direction: 1
+    - name:  nodeCPUSeconds-Masters
+      metricName : nodeCPUSeconds-Masters
+      labels.mode.keyword: idle
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: nodeCPUSeconds-Masters idle]"
+      direction: 1
+    - name:  nodeCPUSeconds-Masters-idle
+      metricName : nodeCPUSeconds-Masters
+      labels.mode.keyword: idle
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: nodeCPUSeconds-Masters idle]"
+      direction: 1
+    - name:  nodeCPUSeconds-Masters-idle
+      metricName : nodeCPUSeconds-Masters
+      labels.mode.keyword: idle
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: nodeCPUSeconds-Masters idle]"
+      direction: 1
+    - name:  max-memory-sum-workers
+      metricName :   max-memory-sum-workers
+      metric_of_interest: value
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: max-memory-sum-workers idle]"
+      direction: 1
+    - name:  max-memory-sum-masters
+      metricName :   max-memory-sum-masters
+      metric_of_interest: value
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: max-memory-sum-masters idle]"
+      direction: 1
+    - name: cgroupMemoryRSS-Workers-kubepods
+      metricName : cgroupMemoryRSS-Workers
+      metric_of_interest: value
+      labels.id.keyword: /kubepods.slice
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-Workers kubepods slice]"
+      direction: 1
+    - name: cgroupMemoryRSS-Masters-crio
+      metricName : cgroupMemoryRSS-Masters
+      metric_of_interest: value
+      labels.id.keyword: /system.slice/crio.service
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-Masters crio]"
+      direction: 1
+    - name: cgroupMemoryRSS-namespaces-ovnk
+      metricName : cgroupMemoryRSS-namespaces
+      metric_of_interest: value
+      labels.namespace.keyword: openshift-ovn-kubernetes
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-namespaces ovnk]"
+      direction: 1
+    - name: cgroupCPUSeconds-namespaces-ovnk
+      metricName : cgroupCPUSeconds-namespaces
+      metric_of_interest: value
+      labels.namespace.keyword: openshift-ovn-kubernetes
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupCPUSeconds-namespaces ovnk]"
+      direction: 1
+    - name: cgroupCPUSeconds-namespaces-ovnk
+      metricName : cgroupCPUSeconds-namespaces
+      metric_of_interest: value
+      labels.namespace.keyword: openshift-ovn-kubernetes
+      agg:
+        value: mem
+        agg_type: avg
+      labels:
+        - "[Jira: cgroupCPUSeconds-namespaces ovnk]"
+      direction: 1
+    - name:  nodeCPUSeconds-Masters-iowait
+      metricName : nodeCPUSeconds-Masters
+      labels.mode.keyword: iowait
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: nodeCPUSeconds-Masters iowait]"
+      direction: 1
+    - name:  nodeCPUSeconds-Masters-iowait
+      metricName : nodeCPUSeconds-Masters
+      labels.mode.keyword: iowait
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: nodeCPUSeconds-Masters iowait]"
+      direction: 1
+    - name:  nodeCPUSeconds-Masters-user
+      metricName : nodeCPUSeconds-Masters
+      labels.mode.keyword: user
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: nodeCPUSeconds-Masters user]"
+      direction: 1
+    - name:  nodeCPUSeconds-Masters-user
+      metricName : nodeCPUSeconds-Masters
+      labels.mode.keyword: user
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: nodeCPUSeconds-Masters user]"
+      direction: 1
+    - name:  nodeCPUSeconds-Workers-iowait
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: iowait
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers iowait]"
+      direction: 1
+    - name:  nodeCPUSeconds-Workers-iowait
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: iowait
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers iowait]"
+      direction: 1
+    - name:  nodeCPUSeconds-Workers-user
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: user
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers user]"
+      direction: 1
+    - name:  nodeCPUSeconds-Workers-user
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: user
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers user]"
+      direction: 1
+    - name:  nodeCPUSeconds-Workers-system
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: system
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers system]"
+      direction: 1
+    - name:  nodeCPUSeconds-Workers-system
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: system
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers system]"
+    - name:  nodeCPUSeconds-Workers-irq
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: irq
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers irq]"
+      direction: 1
+    - name:  nodeCPUSeconds-Workers-irq
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: irq
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers irq]"
+    - name:  nodeCPUSeconds-Workers-softirq
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: softirq
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers softirq]"
+      direction: 1
+    - name:  nodeCPUSeconds-Workers-softirq
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: softirq
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers softirq]"

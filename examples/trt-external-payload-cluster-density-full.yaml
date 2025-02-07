@@ -1,0 +1,355 @@
+tests :
+  - name : payload-cluster-density-v2
+    index: {{ es_metadata_index }}
+    benchmarkIndex: {{ es_benchmark_index }}
+    metadata:
+      platform: AWS
+      clusterType: self-managed
+      masterNodesType: m6a.xlarge
+      masterNodesCount: 3
+      workerNodesType: m6a.xlarge
+      workerNodesCount: 6
+      benchmark.keyword: cluster-density-v2
+      ocpVersion: {{ version }}
+      networkType: OVNKubernetes
+
+    metrics : 
+    - name:  podReadyLatency
+      metricName: podLatencyQuantilesMeasurement
+      quantileName: Ready
+      metric_of_interest: max
+      not: 
+        jobConfig.name: "garbage-collection"
+      labels:
+        - "[Jira: PerfScale]"
+      direction: 1
+
+    - name:  cgroupCPUSeconds-namespaces
+      metricName : cgroupCPUSeconds-namespaces
+      labels.namespace.keyword: openshift-kube-apiserver
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: kube-apiserver]"
+      direction: 1
+
+    - name:  nodeCPUSeconds-Workers
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: idle
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers idle]"
+      direction: 1
+    - name:  nodeCPUSeconds-Workers
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: idle
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: min
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers idle]"
+      direction: 1
+    - name:  nodeCPUSeconds-Workers
+      metricName : nodeCPUSeconds-Workers
+      labels.mode.keyword: idle
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: nodeCPUSeconds-Workers idle]"
+      direction: 1
+    - name:  nodeCPUSeconds-Masters
+      metricName : nodeCPUSeconds-Masters
+      labels.mode.keyword: idle
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: nodeCPUSeconds-Masters idle]"
+      direction: 1
+    - name:  nodeCPUSeconds-Masters
+      metricName : nodeCPUSeconds-Masters
+      labels.mode.keyword: idle
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: min
+      labels:
+        - "[Jira: nodeCPUSeconds-Masters idle]"
+      direction: 1
+    - name:  nodeCPUSeconds-Masters
+      metricName : nodeCPUSeconds-Masters
+      labels.mode.keyword: idle
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: nodeCPUSeconds-Masters idle]"
+      direction: 1
+    - name:  max-memory-sum-workers
+      metricName :   max-memory-sum-workers
+      metric_of_interest: value
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: max-memory-sum-workers idle]"
+      direction: 1
+    - name:  max-memory-sum-masters
+      metricName :   max-memory-sum-masters
+      metric_of_interest: value
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: max-memory-sum-masters idle]"
+      direction: 1
+    - name: cgroupMemoryRSS-Workers-system
+      metricName : cgroupMemoryRSS-Workers
+      metric_of_interest: value
+      labels.id.keyword: /system.slice
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-Workers system slice]"
+      direction: 1
+    - name: cgroupMemoryRSS-Workers-kubepods
+      metricName : cgroupMemoryRSS-Workers
+      metric_of_interest: value
+      labels.id.keyword: /kubepods.slice
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-Workers kubepods slice]"
+      direction: 1
+    - name: cgroupMemoryRSS-Masters-system
+      metricName : cgroupMemoryRSS-Masters
+      metric_of_interest: value
+      labels.id.keyword: /system.slice
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-Masters system slice]"
+      direction: 1
+    - name: cgroupMemoryRSS-Workers-crio
+      metricName : cgroupMemoryRSS-Workers
+      metric_of_interest: value
+      labels.id.keyword: /system.slice/crio.service
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-Workers crio]"
+      direction: 1
+    - name: cgroupCPUSeconds-Workers-crio
+      metricName : cgroupCPUSeconds-Workers
+      metric_of_interest: value
+      labels.id.keyword: /system.slice/crio.service
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupCPUSeconds-Workers crio]"
+      direction: 1
+    - name: cgroupMemoryRSS-Workers-kubelet
+      metricName : cgroupMemoryRSS-Workers
+      metric_of_interest: value
+      labels.id.keyword: /system.slice/kubelet.service
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-Workers kubelet]"
+      direction: 1
+    - name: cgroupCPUSeconds-Workers-kubelet
+      metricName : cgroupCPUSeconds-Workers
+      metric_of_interest: value
+      labels.id.keyword: /system.slice/kubelet.service
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupCPUSeconds-Workers kubelet]"
+      direction: 1
+    - name: cgroupMemoryRSS-Masters-crio
+      metricName : cgroupMemoryRSS-Masters
+      metric_of_interest: value
+      labels.id.keyword: /system.slice/crio.service
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-Masters crio]"
+      direction: 1
+    - name: cgroupCPUSeconds-Masters-crio
+      metricName : cgroupCPUSeconds-Masters
+      metric_of_interest: value
+      labels.id.keyword: /system.slice/crio.service
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupCPUSeconds-Masters crio]"
+      direction: 1
+    - name: cgroupMemoryRSS-Masters-kubelet
+      metricName : cgroupMemoryRSS-Masters
+      metric_of_interest: value
+      labels.id.keyword: /system.slice/kubelet.service
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-Masters kubelet]"
+      direction: 1
+    - name: cgroupCPUSeconds-Masters-kubelet
+      metricName : cgroupCPUSeconds-Masters
+      metric_of_interest: value
+      labels.id.keyword: /system.slice/kubelet.service
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupCPUSeconds-Masters kubelet]"
+      direction: 1
+    - name: cgroupMemoryRSS-Masters-ovs
+      metricName : cgroupMemoryRSS-Masters
+      metric_of_interest: value
+      labels.id.keyword: /system.slice/ovs-vswitchd.service
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-Masters ovs]"
+      direction: 1
+    - name: cgroupCPUSeconds-Masters-ovs
+      metricName : cgroupCPUSeconds-Masters
+      metric_of_interest: value
+      labels.id.keyword: /system.slice/ovs-vswitchd.service
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupCPUSeconds-Masters ovs]"
+      direction: 1
+    - name: cgroupMemoryRSS-Workers-ovs
+      metricName : cgroupMemoryRSS-Workers
+      metric_of_interest: value
+      labels.id.keyword: /system.slice/ovs-vswitchd.service
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-Workers ovs]"
+      direction: 1
+    - name: cgroupCPUSeconds-Workers-ovs
+      metricName : cgroupCPUSeconds-Workers
+      metric_of_interest: value
+      labels.id.keyword: /system.slice/ovs-vswitchd.service
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupCPUSeconds-Workers ovs]"
+      direction: 1
+    - name: cgroupMemoryRSS-Masters-kubepods
+      metricName : cgroupMemoryRSS-Masters
+      metric_of_interest: value
+      labels.id.keyword: /kubepods.slice
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-Masters kubepods slice]"
+      direction: 1
+    - name: cgroupMemoryRSS-namespaces-ovnk
+      metricName : cgroupMemoryRSS-namespaces
+      metric_of_interest: value
+      labels.namespace.keyword: openshift-ovn-kubernetes
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-namespaces ovnk]"
+      direction: 1
+    - name: cgroupCPUSeconds-namespaces-ovnk
+      metricName : cgroupCPUSeconds-namespaces
+      metric_of_interest: value
+      labels.namespace.keyword: openshift-ovn-kubernetes
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupCPUSeconds-namespaces ovnk]"
+      direction: 1
+    - name: cgroupCPUSeconds-namespaces-ovnk
+      metricName : cgroupCPUSeconds-namespaces
+      metric_of_interest: value
+      labels.namespace.keyword: openshift-ovn-kubernetes
+      agg:
+        value: mem
+        agg_type: avg
+      labels:
+        - "[Jira: cgroupCPUSeconds-namespaces ovnk]"
+      direction: 1
+    - name: cgroupMemoryRSS-namespaces-mcd
+      metricName : cgroupMemoryRSS-namespaces
+      metric_of_interest: value
+      labels.namespace.keyword: openshift-machine-api
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-namespaces mapi]"
+      direction: 1
+    - name: cgroupCPUSeconds-namespaces-mcd
+      metricName : cgroupCPUSeconds-namespaces
+      metric_of_interest: value
+      labels.namespace.keyword: openshift-machine-api
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupCPUSeconds-namespaces mcd]"
+      direction: 1
+    - name: cgroupCPUSeconds-namespaces-mcd
+      metricName : cgroupCPUSeconds-namespaces
+      metric_of_interest: value
+      labels.namespace.keyword: openshift-machine-api
+      agg:
+        value: mem
+        agg_type: avg
+      labels:
+        - "[Jira: cgroupCPUSeconds-namespaces mcd]"
+      direction: 1
+    - name: cgroupMemoryRSS-namespaces-kapi
+      metricName : cgroupMemoryRSS-namespaces
+      metric_of_interest: value
+      labels.namespace.keyword: openshift-kube-apiserver
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-namespaces kapi]"
+      direction: 1
+    - name: cgroupMemoryRSS-namespaces-kcm
+      metricName : cgroupMemoryRSS-namespaces
+      metric_of_interest: value
+      labels.namespace.keyword: openshift-kube-controller-manager
+      agg:
+        value: mem
+        agg_type: max
+      labels:
+        - "[Jira: cgroupMemoryRSS-namespaces kcm]"
+      direction: 1
