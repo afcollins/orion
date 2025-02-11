@@ -1,0 +1,124 @@
+tests :
+  - name : payload-node-density
+    index: {{ es_metadata_index }}
+    benchmarkIndex: {{ es_benchmark_index }}
+    metadata:
+      platform: AWS
+      clusterType: self-managed
+      masterNodesType: m6a.xlarge
+      masterNodesCount: 3
+      workerNodesType: m6a.xlarge
+      workerNodesCount: 6
+      benchmark.keyword: node-density 
+      ocpVersion: {{ version }}
+      networkType: OVNKubernetes
+
+    metrics : 
+    - name:  99thEtcdDiskBackendCommit
+      metricName : 99thEtcdDiskBackendCommit
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: 99thEtcdDiskBackendCommit]"
+      direction: 1
+    - name:  99thEtcdDiskBackendCommitDurationSeconds
+      metricName : 99thEtcdDiskBackendCommitDurationSeconds
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: 99thEtcdDiskBackendCommitDurationSeconds]"
+      direction: 1
+    - name:  99thEtcdDiskWalFsync
+      metricName : 99thEtcdDiskWalFsync
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: 99thEtcdDiskWalFsync]"
+      direction: 1
+    - name:  99thEtcdDiskFsyncWalDurationSeconds
+      metricName : 99thEtcdDiskWalFsyncDurationSeconds
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: 99thEtcdDiskWalFsyncDurationSeconds]"
+      direction: 1
+    - name:  99thEtcdRoundTripTime
+      metricName : 99thEtcdRoundTripTime
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: 99thEtcdRoundTripTime]"
+      direction: 1
+    - name:  99thEtcdRoundTripTimeSeconds
+      metricName : 99thEtcdRoundTripTimeSeconds
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: avg
+      labels:
+        - "[Jira: 99thEtcdRoundTripTimeSeconds]"
+      direction: 1
+    - name:  99thEtcdDiskBackendCommit
+      metricName : 99thEtcdDiskBackendCommit
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: 99thEtcdDiskBackendCommit]"
+      direction: 1
+    - name:  99thEtcdDiskBackendCommitDurationSeconds
+      metricName : 99thEtcdDiskBackendCommitDurationSeconds
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: 99thEtcdDiskBackendCommitDurationSeconds]"
+      direction: 1
+    - name:  99thEtcdDiskWalFsync
+      metricName : 99thEtcdDiskWalFsync
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: 99thEtcdDiskWalFsync]"
+      direction: 1
+    - name:  99thEtcdDiskFsyncWalDurationSeconds
+      metricName : 99thEtcdDiskWalFsyncDurationSeconds
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: 99thEtcdDiskWalFsyncDurationSeconds]"
+      direction: 1
+    - name:  99thEtcdRoundTripTime
+      metricName : 99thEtcdRoundTripTime
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: 99thEtcdRoundTripTime]"
+      direction: 1
+    - name:  99thEtcdRoundTripTimeSeconds
+      metricName : 99thEtcdRoundTripTimeSeconds
+      metric_of_interest: value
+      agg:
+        value: cpu
+        agg_type: max
+      labels:
+        - "[Jira: 99thEtcdRoundTripTimeSeconds]"
+      direction: 1

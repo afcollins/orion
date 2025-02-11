@@ -1,0 +1,252 @@
+tests :
+  - name : payload-cluster-density-v2
+    index: {{ es_metadata_index }}
+    benchmarkIndex: {{ es_benchmark_index }}
+    metadata:
+      platform: AWS
+      clusterType: self-managed
+      masterNodesType: m6a.xlarge
+      masterNodesCount: 3
+      workerNodesType: m6a.xlarge
+      workerNodesCount: 6
+      benchmark.keyword: cluster-density-v2
+      ocpVersion: {{ version }}
+      networkType: OVNKubernetes
+
+    metrics : 
+    - name:  readOnlyAPICallsLatency
+      metricName : readOnlyAPICallsLatency
+      metric_of_interest: value
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: readOnlyAPICallsLatency]"
+      direction: 1
+    - name:  readOnlyAPICallsLatency
+      metricName : readOnlyAPICallsLatency
+      metric_of_interest: value
+      agg:
+        value: latency
+        agg_type: max
+      labels:
+        - "[Jira: readOnlyAPICallsLatency]"
+      direction: 1
+    - name:  mutatingAPICallsLatency
+      metricName : mutatingAPICallsLatency
+      metric_of_interest: value
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: mutatingAPICallsLatency]"
+      direction: 1
+    - name:  mutatingAPICallsLatency
+      metricName : mutatingAPICallsLatency
+      metric_of_interest: value
+      agg:
+        value: latency
+        agg_type: max
+      labels:
+        - "[Jira: mutatingAPICallsLatency]"
+      direction: 1
+    - name:  mutatingAPICallsLatency_apirequestcounts
+      metricName : mutatingAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: apirequestcounts
+      agg:
+        value: latency
+        agg_type: max
+      labels:
+        - "[Jira: mutatingAPICallsLatency]"
+      direction: 1
+    - name:  mutatingAPICallsLatency_apirequestcounts
+      metricName : mutatingAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: apirequestcounts
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: mutatingAPICallsLatency]"
+      direction: 1
+    - name:  mutatingAPICallsLatency_pods
+      metricName : mutatingAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: pods
+      agg:
+        value: latency
+        agg_type: max
+      labels:
+        - "[Jira: mutatingAPICallsLatency]"
+      direction: 1
+    - name:  mutatingAPICallsLatency_pods
+      metricName : mutatingAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: pods
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: mutatingAPICallsLatency]"
+      direction: 1
+    - name:  mutatingAPICallsLatency_configmaps
+      metricName : mutatingAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: configmaps
+      agg:
+        value: latency
+        agg_type: max
+      labels:
+        - "[Jira: mutatingAPICallsLatency]"
+      direction: 1
+    - name:  mutatingAPICallsLatency_configmaps
+      metricName : mutatingAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: configmaps
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: mutatingAPICallsLatency]"
+      direction: 1
+    - name:  mutatingAPICallsLatency_networkpolicies
+      metricName : mutatingAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: networkpolicies
+      agg:
+        value: latency
+        agg_type: max
+      labels:
+        - "[Jira: mutatingAPICallsLatency]"
+      direction: 1
+    - name:  mutatingAPICallsLatency_networkpolicies
+      metricName : mutatingAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: networkpolicies
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: mutatingAPICallsLatency]"
+      direction: 1
+    - name:  mutatingAPICallsLatency_services
+      metricName : mutatingAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: services
+      agg:
+        value: latency
+        agg_type: max
+      labels:
+        - "[Jira: mutatingAPICallsLatency]"
+      direction: 1
+    - name:  mutatingAPICallsLatency_services
+      metricName : mutatingAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: services
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: mutatingAPICallsLatency]"
+      direction: 1
+    - name:  readonlyAPICallsLatency_apirequestcounts
+      metricName : readonlyAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: apirequestcounts
+      agg:
+        value: latency
+        agg_type: max
+      labels:
+        - "[Jira: readonlyAPICallsLatency]"
+      direction: 1
+    - name:  readonlyAPICallsLatency_apirequestcounts
+      metricName : readonlyAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: apirequestcounts
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: readonlyAPICallsLatency]"
+      direction: 1
+    - name:  readonlyAPICallsLatency_pods
+      metricName : readonlyAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: pods
+      agg:
+        value: latency
+        agg_type: max
+      labels:
+        - "[Jira: readonlyAPICallsLatency]"
+      direction: 1
+    - name:  readonlyAPICallsLatency_pods
+      metricName : readonlyAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: pods
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: readonlyAPICallsLatency]"
+      direction: 1
+    - name:  readonlyAPICallsLatency_configmaps
+      metricName : readonlyAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: configmaps
+      agg:
+        value: latency
+        agg_type: max
+      labels:
+        - "[Jira: readonlyAPICallsLatency]"
+      direction: 1
+    - name:  readonlyAPICallsLatency_configmaps
+      metricName : readonlyAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: configmaps
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: readonlyAPICallsLatency]"
+      direction: 1
+    - name:  readonlyAPICallsLatency_networkpolicies
+      metricName : readonlyAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: networkpolicies
+      agg:
+        value: latency
+        agg_type: max
+      labels:
+        - "[Jira: readonlyAPICallsLatency]"
+      direction: 1
+    - name:  readonlyAPICallsLatency_networkpolicies
+      metricName : readonlyAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: networkpolicies
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: readonlyAPICallsLatency]"
+      direction: 1
+    - name:  readonlyAPICallsLatency_services
+      metricName : readonlyAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: services
+      agg:
+        value: latency
+        agg_type: max
+      labels:
+        - "[Jira: readonlyAPICallsLatency]"
+      direction: 1
+    - name:  readonlyAPICallsLatency_services
+      metricName : readonlyAPICallsLatency
+      metric_of_interest: value
+      labels.resource.keyword: services
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: readonlyAPICallsLatency]"
+      direction: 1

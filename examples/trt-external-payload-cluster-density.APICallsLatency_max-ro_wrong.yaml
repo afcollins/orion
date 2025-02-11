@@ -1,0 +1,34 @@
+tests :
+  - name : payload-cluster-density-v2
+    index: {{ es_metadata_index }}
+    benchmarkIndex: {{ es_benchmark_index }}
+    metadata:
+      platform: AWS
+      clusterType: self-managed
+      masterNodesType: m6a.xlarge
+      masterNodesCount: 3
+      workerNodesType: m6a.xlarge
+      workerNodesCount: 6
+      benchmark.keyword: cluster-density-v2
+      ocpVersion: {{ version }}
+      networkType: OVNKubernetes
+
+    metrics : 
+    - name:  readOnlyAPICallsLatency
+      metricName : readOnlyAPICallsLatency
+      metric_of_interest: value
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: readOnlyAPICallsLatency]"
+      direction: 1
+    - name:  max-ro-apicalls-latency
+      metricName : max-ro-apicalls-latency
+      metric_of_interest: value
+      agg:
+        value: latency
+        agg_type: avg
+      labels:
+        - "[Jira: max-ro-apicalls-latency]"
+      direction: 1
