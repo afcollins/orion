@@ -1,14 +1,14 @@
 tests :
-  - name : payload-cluster-density-v2
+  - name : gcp-24-cluster-density-v2
     index: {{ es_metadata_index }}
     benchmarkIndex: {{ es_benchmark_index }}
     metadata:
-      platform: AWS
+      platform: GCP
       clusterType: self-managed
-      masterNodesType: m6a.xlarge
+      masterNodesType: e2-custom-6-16384
       masterNodesCount: 3
-      workerNodesType: m6a.xlarge
-      workerNodesCount: 6
+      workerNodesType: e2-standard-4
+      workerNodesCount: 24
       benchmark.keyword: cluster-density-v2
       ocpVersion: {{ version }}
       networkType: OVNKubernetes
@@ -23,15 +23,6 @@ tests :
       labels:
         - "[Jira: max-ro-apicalls-latency]"
       direction: 1
-    - name:  readOnlyAPICallsLatency
-      metricName : readOnlyAPICallsLatency
-      metric_of_interest: value
-      agg:
-        value: latency
-        agg_type: max
-      labels:
-        - "[Jira: readOnlyAPICallsLatency]"
-      direction: 1
     - name:  max-mutating-apicalls-latency
       metricName.keyword: max-mutating-apicalls-latency
       metric_of_interest: value
@@ -40,24 +31,6 @@ tests :
         agg_type: max
       labels:
         - "[Jira: max-mutating-apicalls-latency]"
-      direction: 1
-    - name:  mutatingAPICallsLatency
-      metricName : mutatingAPICallsLatency
-      metric_of_interest: value
-      agg:
-        value: latency
-        agg_type: max
-      labels:
-        - "[Jira: mutatingAPICallsLatency]"
-      direction: 1
-    - name:  readOnlyAPICallsLatency
-      metricName : readOnlyAPICallsLatency
-      metric_of_interest: value
-      agg:
-        value: latency
-        agg_type: avg
-      labels:
-        - "[Jira: readOnlyAPICallsLatency]"
       direction: 1
     - name:  avg-ro-apicalls-latency
       metricName.keyword: avg-ro-apicalls-latency
@@ -85,13 +58,4 @@ tests :
         agg_type: avg
       labels:
         - "[Jira: max-mutating-apicalls-latency]"
-      direction: 1
-    - name:  mutatingAPICallsLatency
-      metricName : mutatingAPICallsLatency
-      metric_of_interest: value
-      agg:
-        value: latency
-        agg_type: avg
-      labels:
-        - "[Jira: mutatingAPICallsLatency]"
       direction: 1
