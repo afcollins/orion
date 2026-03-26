@@ -6,6 +6,7 @@ import orion.constants as cnsts
 from .edivisive import EDivisive
 from .isolationforest import IsolationForestWeightedMean
 from .cmr import CMR
+from .meanchange import MeanChange
 
 
 class AlgorithmFactory: # pylint: disable= too-few-public-methods, too-many-arguments, line-too-long
@@ -39,4 +40,6 @@ class AlgorithmFactory: # pylint: disable= too-few-public-methods, too-many-argu
             return IsolationForestWeightedMean(dataframe, test, options, metrics_config)
         if algorithm == cnsts.CMR:
             return CMR(dataframe, test, options, metrics_config)
+        if algorithm == cnsts.MEAN_CHANGE:
+            return MeanChange(dataframe, test, options, metrics_config)
         raise ValueError("Invalid algorithm called")

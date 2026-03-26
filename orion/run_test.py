@@ -39,6 +39,8 @@ def get_algorithm_type(kwargs):
         algorithm_name = cnsts.ISOLATION_FOREST
     elif kwargs['cmr']:
         algorithm_name = cnsts.CMR
+    elif kwargs['mean_change']:
+        algorithm_name = cnsts.MEAN_CHANGE
     else:
         algorithm_name = None
     return algorithm_name
