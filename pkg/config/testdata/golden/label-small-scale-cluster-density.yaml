@@ -1,0 +1,56 @@
+tests:
+    - name: small-scale-cluster-density-v2
+      metadata:
+        platform: AWS
+        masterNodesType: m6a.xlarge
+        masterNodesCount: 3
+        workerNodesType: m6a.xlarge
+        workerNodesCount: 24
+        benchmark.keyword: cluster-density-v2
+        ocpVersion: '{{ version }}'
+        not:
+            stream: okd
+      metrics:
+        - name: podReadyLatency
+          metricName.keyword: podLatencyQuantilesMeasurement
+          quantileName: Ready
+          metric_of_interest: P99
+          not:
+            jobConfig.name: garbage-collection
+          labels:
+            - '[Jira: PodLatency]'
+        - name: apiserverCPU
+          labels.namespace.keyword: openshift-kube-apiserver
+          metricName.keyword: containerCPU
+          metric_of_interest: value
+          agg:
+            value: cpu
+            agg_type: avg
+          labels:
+            - '[Jira: kube-apiserver]'
+        - name: ovnCPU
+          labels.namespace.keyword: openshift-ovn-kubernetes
+          metricName.keyword: containerCPU
+          metric_of_interest: value
+          agg:
+            value: cpu
+            agg_type: avg
+          labels:
+            - '[Jira: ovnKubernetes]'
+        - name: etcdCPU
+          labels.namespace.keyword: openshift-etcd
+          metricName.keyword: containerCPU
+          metric_of_interest: value
+          agg:
+            value: cpu
+            agg_type: avg
+          labels:
+            - '[Jira: etcd]'
+        - name: etcdDisk
+          metricName.keyword: 99thEtcdDiskBackendCommitDurationSeconds
+          metric_of_interest: value
+          agg:
+            value: duration
+            agg_type: avg
+          labels:
+            - '[Jira: etcd]'

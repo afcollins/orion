@@ -1,0 +1,94 @@
+tests:
+    - name: keystone-performance-test
+      uuid_field: browbeat_uuid
+      threshold: 10
+      direction: 1
+      metadata:
+        jobName.keyword: periodic-ci-openshift-eng-ocp-qe-perfscale-ci-main-metal-rhoso-x86-weekly-rhoso-keystone
+        jobType: periodic
+        jobStatus: pass
+      metrics:
+        - name: keystone
+          action: authenticate.keystone
+          doc_type: result
+          metric_of_interest: raw
+          agg:
+            value: duration
+            agg_type: percentiles
+            percents:
+                - 95
+            target_percentile: 95
+          labels:
+            - '[Jira: KEYSTONE]'
+        - name: validateNeutron
+          action: authenticate.validate_neutron
+          doc_type: result
+          metric_of_interest: raw
+          agg:
+            value: duration
+            agg_type: percentiles
+            percents:
+                - 95
+            target_percentile: 95
+          labels:
+            - '[Jira: KEYSTONE]'
+        - name: validateNova
+          action: authenticate.validate_nova
+          doc_type: result
+          metric_of_interest: raw
+          agg:
+            value: duration
+            agg_type: percentiles
+            percents:
+                - 95
+            target_percentile: 95
+          labels:
+            - '[Jira: KEYSTONE]'
+        - name: createProject
+          action: keystone_v3.create_project
+          doc_type: result
+          metric_of_interest: raw
+          agg:
+            value: duration
+            agg_type: percentiles
+            percents:
+                - 95
+            target_percentile: 95
+          labels:
+            - '[Jira: KEYSTONE]'
+        - name: createUser
+          action: keystone_v3.create_user
+          doc_type: result
+          metric_of_interest: raw
+          agg:
+            value: duration
+            agg_type: percentiles
+            percents:
+                - 95
+            target_percentile: 95
+          labels:
+            - '[Jira: KEYSTONE]'
+        - name: listProjects
+          action: keystone_v3.list_projects
+          doc_type: result
+          metric_of_interest: raw
+          agg:
+            value: duration
+            agg_type: percentiles
+            percents:
+                - 95
+            target_percentile: 95
+          labels:
+            - '[Jira: KEYSTONE]'
+        - name: listUsers
+          action: keystone_v3.list_users
+          doc_type: result
+          metric_of_interest: raw
+          agg:
+            value: duration
+            agg_type: percentiles
+            percents:
+                - 95
+            target_percentile: 95
+          labels:
+            - '[Jira: KEYSTONE]'
