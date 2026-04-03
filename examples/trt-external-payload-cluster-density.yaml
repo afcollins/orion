@@ -334,5 +334,13 @@ tests:
         labels:
           - "[Jira: Networking / ovn-kubernetes]"
         direction: 1
+      - name: etcdCompact
+        metricName.keyword: max-99thEtcdCompaction
+        metric_of_interest: value
+        labels:
+          - "[Jira: etcd]"
+        direction: 1
+        not:
+          jobConfig.name: "garbage-collection"
         threshold: 10
 
