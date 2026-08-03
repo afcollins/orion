@@ -2,7 +2,7 @@
 
 # pylint: disable = invalid-name, invalid-unary-operand-type, no-member
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 
 # pylint: disable=import-error
@@ -10,6 +10,7 @@ import pandas as pd
 from opensearchpy import OpenSearch
 from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 from opensearch_dsl import Search, Q
+from orion.cache import QueryCache
 from orion.logger import SingletonLogger
 
 
@@ -26,6 +27,10 @@ class Matcher:
         uuid_field (str): Name of the field containing the UUID.
     """
 
+    # Fallback for instances created via __new__ without calling __init__.
+    cache = QueryCache(enabled=False)
+    metadata_context: Dict[str, Any] = {}
+
     # pylint: disable=too-many-arguments
     def __init__(
         self,
@@ -33,7 +38,8 @@ class Matcher:
         es_server: str = "https://localhost:9200",
         verify_certs: bool = True,
         version_field: str = "ocpVersion",
-        uuid_field: str = "uuid"
+        uuid_field: str = "uuid",
+        cache: Optional[QueryCache] = None,
     ):
         self.index = index
         self.search_size = 10000
@@ -47,6 +53,16 @@ class Matcher:
                              pool_maxsize=5)
         self.version_field = version_field
         self.uuid_field = uuid_field
+        self.cache = cache if cache is not None else QueryCache()
+        self.metadata_context: Dict[str, Any] = {}
+
+    def set_metadata_context(self, metadata: Dict[str, Any]) -> None:
+        """Store the current test's metadata block for cache-key scoping.
+
+        Args:
+            metadata: metadata dict from the test config (platform, benchmark, etc.)
+        """
+        self.metadata_context = metadata
 
     def get_metadata_by_uuid(self, uuid: str) -> dict:
         """Returns back metadata when uuid is given
@@ -57,6 +73,14 @@ class Matcher:
         Returns:
             _type_: _description_
         """
+        cache_key = QueryCache.make_key(
+            self.index, "get_metadata_by_uuid", uuid
+        )
+        cached = self.cache.get(cache_key)
+        if cached is not None:
+            self.logger.debug("Cache hit for get_metadata_by_uuid uuid=%s", uuid)
+            return cached
+
         query = Q("match",  **{self.uuid_field: f"{uuid}"})
         result = {}
         s = Search(using=self.es, index=self.index).query(query)
@@ -64,6 +88,8 @@ class Matcher:
         hits = res.hits.hits
         if hits:
             result = dict(hits[0].to_dict()["_source"])
+        self.logger.debug("Cache miss for get_metadata_by_uuid uuid=%s, storing result", uuid)
+        self.cache.put(cache_key, self.index, "get_metadata_by_uuid", result)
         return result
 
     def query_index(self, search: Search, return_all: bool = False, max_hits: int = 0):
@@ -281,6 +307,18 @@ class Matcher:
         """
         if len(uuids) > 1 and uuid in uuids:
             uuids.remove(uuid)
+
+        cache_key = QueryCache.make_key(
+            self.index, "get_results", self.metadata_context, uuid,
+            sorted(uuids), metrics, exists_fields, timestamp_field,
+        )
+        cached = self.cache.get(cache_key)
+        if cached is not None:
+            self.logger.debug(
+                "Cache hit for get_results uuid=%s", uuid
+            )
+            return cached
+
         metric_queries = []
         not_queries = [
             ~Q("match", **{not_item_key: not_item_value})
@@ -315,6 +353,10 @@ class Matcher:
         )
         all_hits = self.query_index(search, return_all=True)
         runs = [hit.to_dict()["_source"] for hit in all_hits]
+        self.logger.debug("Cache miss for get_results uuid=%s, storing %d runs", uuid, len(runs))
+        self.cache.put(
+            cache_key, self.index, "get_results", runs
+        )
         return runs
 
     def get_agg_metric_query(
@@ -330,6 +372,23 @@ class Matcher:
             timestamp_field (str): timestamp field in data
 
         """
+        namespace = QueryCache.make_key(self.metadata_context, metrics, timestamp_field)
+        cached = self.cache.get_uuid_rows(self.index, namespace, uuids)
+        missing = [u for u in uuids if u not in cached]
+
+        if not missing:
+            self.logger.info(
+                "Full cache hit for get_agg_metric_query metric %s "
+                "against index %s (%d uuids)",
+                metrics.get("name"), self.index, len(uuids),
+            )
+            return [v for v in cached.values() if not v.get("_cached_empty")]
+
+        self.logger.debug(
+            "Cache partial miss for get_agg_metric_query metric %s: "
+            "%d cached, %d missing of %d total",
+            metrics.get("name"), len(cached), len(missing), len(uuids),
+        )
         metric_queries = []
         not_queries = [
             ~Q("match", **{not_item_key: not_item_value})
@@ -344,7 +403,7 @@ class Matcher:
         query = Q(
             "bool",
             must=[
-                Q("terms", **{self.uuid_field + ".keyword": uuids}),
+                Q("terms", **{self.uuid_field + ".keyword": missing}),
                 metric_query,
             ],
         )
@@ -356,7 +415,11 @@ class Matcher:
         )
         metric_of_interest = metrics["metric_of_interest"]
         agg_type = metrics["agg"]["agg_type"]
-        uuid_bucket = search.aggs.bucket("uuid", "terms", field=self.uuid_field+".keyword", size=len(uuids))
+        uuid_bucket = search.aggs.bucket(
+            "uuid", "terms",
+            field=self.uuid_field+".keyword",
+            size=len(missing),
+        )
         uuid_bucket.metric("time", "avg", field=timestamp_field)
          # Handle percentile aggregations differently from single-value aggregations
         if agg_type == "percentiles":
@@ -366,7 +429,7 @@ class Matcher:
                     "Metric '%s' has agg_type 'percentiles' but no 'percents' list — skipping",
                     metrics["name"]
                 )
-                return []
+                return list(cached.values())
             uuid_bucket.metric(
                 metric_of_interest, "percentiles",
                 field=metrics["metric_of_interest"],
@@ -382,8 +445,25 @@ class Matcher:
         self.logger.info("Executing aggregated query for metric %s against index %s",
             metrics["name"], self.index)
         self.logger.debug("Executing query \r\n%s", search.to_dict())
-        data = self.parse_agg_results(result, agg_type, timestamp_field, metrics)
-        return data
+        fresh_rows = self.parse_agg_results(result, agg_type, timestamp_field, metrics)
+        self.logger.debug(
+            "Cache store for get_agg_metric_query metric %s: %d fresh rows",
+            metrics.get("name"), len(fresh_rows),
+        )
+        self.cache.put_uuid_rows(
+            self.index, namespace, self.uuid_field, fresh_rows
+        )
+        fresh_uuids = {row[self.uuid_field] for row in fresh_rows}
+        empty_uuids = [u for u in missing if u not in fresh_uuids]
+        if empty_uuids:
+            self.logger.debug(
+                "Caching %d empty-result UUIDs for get_agg_metric_query", len(empty_uuids)
+            )
+            self.cache.put_uuid_rows(
+                self.index, namespace, self.uuid_field,
+                [{self.uuid_field: u, "_cached_empty": True} for u in empty_uuids],
+            )
+        return [v for v in cached.values() if not v.get("_cached_empty")] + fresh_rows
 
     def parse_agg_results(
         self, data: Dict[Any, Any],
@@ -451,9 +531,49 @@ class Matcher:
         if not metrics_list:
             return {}
 
+        # --- cache: read per-metric cached rows, find per-metric missing uuids -
+        cached_by_metric: Dict[str, Dict[str, Any]] = {}
+        namespaces: Dict[str, str] = {}
+        missing_by_metric: Dict[str, set] = {}
+        for metric in metrics_list:
+            ns = QueryCache.make_key(self.metadata_context, metric, timestamp_field)
+            namespaces[metric["name"]] = ns
+            metric_cached = self.cache.get_uuid_rows(
+                self.index, ns, uuids
+            )
+            cached_by_metric[metric["name"]] = metric_cached
+            metric_missing = {u for u in uuids if u not in metric_cached}
+            if metric_missing:
+                missing_by_metric[metric["name"]] = metric_missing
+
+        if not missing_by_metric:
+            self.logger.info(
+                "Full cache hit for get_agg_metrics_batch "
+                "(%d metrics, %d uuids) against index %s",
+                len(metrics_list), len(uuids), self.index,
+            )
+            return {
+                m["name"]: [v for v in cached_by_metric[m["name"]].values()
+                            if not v.get("_cached_empty")]
+                for m in metrics_list
+            }
+
+        all_missing: set = set()
+        for s in missing_by_metric.values():
+            all_missing |= s
+        missing = sorted(all_missing)
+        metrics_to_query = [m for m in metrics_list if m["name"] in missing_by_metric]
+
+        self.logger.debug(
+            "Cache partial miss for get_agg_metrics_batch: "
+            "%d missing uuids of %d total across %d of %d metrics",
+            len(missing), len(uuids), len(metrics_to_query), len(metrics_list),
+        )
+
+        # --- ES query, scoped to missing uuids and uncached metrics only ----
         query = Q(
             "bool",
-            must=[Q("terms", **{self.uuid_field + ".keyword": uuids})],
+            must=[Q("terms", **{self.uuid_field + ".keyword": missing})],
         )
         search = (
             Search(using=self.es, index=self.index)
@@ -463,11 +583,12 @@ class Matcher:
         )
 
         uuid_bucket = search.aggs.bucket(
-            "uuid", "terms", field=self.uuid_field + ".keyword", size=len(uuids)
+            "uuid", "terms", field=self.uuid_field + ".keyword",
+            size=len(missing),
         )
         uuid_bucket.metric("time", "avg", field=timestamp_field)
 
-        for metric in metrics_list:
+        for metric in metrics_to_query:
             agg_name = metric["name"]
             agg_type = metric["agg"]["agg_type"]
             field = metric["metric_of_interest"]
@@ -499,13 +620,53 @@ class Matcher:
                 filtered_bucket.metric(field, agg_type, field=field)
 
         self.logger.info(
-            "Executing batched aggregation query for %d metrics against index %s",
-            len(metrics_list), self.index,
+            "Executing batched aggregation query for %d of %d metrics against index %s",
+            len(metrics_to_query), len(metrics_list), self.index,
         )
         self.logger.debug("Executing query \r\n%s", search.to_dict())
 
         result = search.execute()
-        return self.parse_batch_agg_results(result, metrics_list, timestamp_field)
+        fresh_by_metric = self.parse_batch_agg_results(
+            result, metrics_to_query, timestamp_field
+        )
+
+        # --- cache: store fresh rows and merge with cached --------------------
+        merged: Dict[str, List[Dict[Any, Any]]] = {}
+        for metric in metrics_list:
+            mname = metric["name"]
+            ns = namespaces[mname]
+            if mname not in missing_by_metric:
+                merged[mname] = [v for v in cached_by_metric[mname].values()
+                                 if not v.get("_cached_empty")]
+                continue
+            metric_missing = missing_by_metric[mname]
+            fresh_rows = fresh_by_metric.get(mname, [])
+            if fresh_rows:
+                self.logger.debug(
+                    "Cache store for get_agg_metrics_batch metric %s: %d fresh rows",
+                    mname, len(fresh_rows),
+                )
+                self.cache.put_uuid_rows(
+                    self.index, ns, self.uuid_field, fresh_rows
+                )
+            fresh_uuids = {row[self.uuid_field] for row in fresh_rows}
+            empty_uuids = [u for u in metric_missing if u not in fresh_uuids
+                           and u not in cached_by_metric[mname]]
+            if empty_uuids:
+                self.logger.debug(
+                    "Caching %d empty-result UUIDs for get_agg_metrics_batch metric %s",
+                    len(empty_uuids), mname,
+                )
+                self.cache.put_uuid_rows(
+                    self.index, ns, self.uuid_field,
+                    [{self.uuid_field: u, "_cached_empty": True} for u in empty_uuids],
+                )
+            merged[mname] = (
+                [v for v in cached_by_metric[mname].values()
+                 if not v.get("_cached_empty")]
+                + fresh_rows
+            )
+        return merged
 
     def parse_batch_agg_results(
         self, data, metrics_list: List[Dict[str, Any]],
@@ -582,10 +743,56 @@ class Matcher:
         if not metrics_list:
             return {}
 
+        # --- cache: read per-metric cached rows, find per-metric missing uuids -
+        # Each cached value is a wrapper dict {uuid_field: uuid, "_docs": [...]}.
+        cached_by_metric: Dict[str, Dict[str, Any]] = {}
+        namespaces: Dict[str, str] = {}
+        missing_by_metric: Dict[str, set] = {}
+        for metric in metrics_list:
+            ns = QueryCache.make_key(
+                self.metadata_context, "get_results_batch", metric, timestamp_field
+            )
+            namespaces[metric["name"]] = ns
+            metric_cached = self.cache.get_uuid_rows(
+                self.index, ns, uuids
+            )
+            cached_by_metric[metric["name"]] = metric_cached
+            metric_missing = {u for u in uuids if u not in metric_cached}
+            if metric_missing:
+                missing_by_metric[metric["name"]] = metric_missing
+
+        if not missing_by_metric:
+            self.logger.info(
+                "Full cache hit for get_results_batch "
+                "(%d metrics, %d uuids) against index %s",
+                len(metrics_list), len(uuids), self.index,
+            )
+            results: Dict[str, List[Dict[Any, Any]]] = {}
+            for metric in metrics_list:
+                mname = metric["name"]
+                docs = []
+                for wrapper in cached_by_metric[mname].values():
+                    docs.extend(wrapper.get("_docs", []))
+                results[mname] = docs
+            return results
+
+        all_missing: set = set()
+        for s in missing_by_metric.values():
+            all_missing |= s
+        missing = sorted(all_missing)
+        metrics_to_query = [m for m in metrics_list if m["name"] in missing_by_metric]
+
+        self.logger.debug(
+            "Cache partial miss for get_results_batch: "
+            "%d missing uuids of %d total across %d of %d metrics",
+            len(missing), len(uuids), len(metrics_to_query), len(metrics_list),
+        )
+
+        # --- ES query, scoped to missing uuids and uncached metrics only ----
         excluded_keys = {"name", "metric_of_interest", "not", "type", "group_by"}
         filter_fields_by_metric = []
         should_clauses = []
-        for metric in metrics_list:
+        for metric in metrics_to_query:
             match_fields = {
                 k: v for k, v in metric.items()
                 if k not in excluded_keys
@@ -601,7 +808,7 @@ class Matcher:
 
         query = Q(
             "bool",
-            must=[Q("terms", **{self.uuid_field + ".keyword": uuids})],
+            must=[Q("terms", **{self.uuid_field + ".keyword": missing})],
             should=should_clauses,
             minimum_should_match=1,
         )
@@ -613,14 +820,16 @@ class Matcher:
         )
 
         self.logger.info(
-            "Executing batched standard query for %d metrics against index %s",
-            len(metrics_list), self.index,
+            "Executing batched standard query for %d of %d metrics against index %s",
+            len(metrics_to_query), len(metrics_list), self.index,
         )
 
         all_hits = self.query_index(search, return_all=True)
         runs = [hit.to_dict()["_source"] for hit in all_hits]
 
-        results = {m["name"]: [] for m in metrics_list}
+        fresh_results: Dict[str, List[Dict[Any, Any]]] = {
+            m["name"]: [] for m in metrics_to_query
+        }
         for doc in runs:
             matched = False
             for metric_name, match_fields, not_fields in filter_fields_by_metric:
@@ -633,7 +842,7 @@ class Matcher:
                     for k, v in not_fields.items()
                 )
                 if matches_positive and matches_negative:
-                    results[metric_name].append(doc)
+                    fresh_results[metric_name].append(doc)
                     matched = True
                     break
             if not matched:
@@ -642,7 +851,62 @@ class Matcher:
                     doc.get(self.uuid_field)
                 )
 
-        return results
+        # --- cache: store fresh rows (grouped by uuid) and merge --------------
+        merged: Dict[str, List[Dict[Any, Any]]] = {}
+        for metric in metrics_list:
+            mname = metric["name"]
+            ns = namespaces[mname]
+
+            if mname not in missing_by_metric:
+                cached_docs = []
+                for wrapper in cached_by_metric[mname].values():
+                    cached_docs.extend(wrapper.get("_docs", []))
+                merged[mname] = cached_docs
+                continue
+
+            metric_missing = missing_by_metric[mname]
+            fresh_docs = fresh_results.get(mname, [])
+
+            # Group fresh docs by uuid for per-uuid caching
+            if fresh_docs:
+                by_uuid: Dict[str, list] = {}
+                for doc in fresh_docs:
+                    uid = doc.get(self.uuid_field)
+                    if uid is not None:
+                        by_uuid.setdefault(uid, []).append(doc)
+                wrapper_rows = [
+                    {self.uuid_field: uid, "_docs": docs}
+                    for uid, docs in by_uuid.items()
+                ]
+                self.logger.debug(
+                    "Cache store for get_results_batch metric %s: %d fresh docs across %d uuids",
+                    mname, len(fresh_docs), len(by_uuid),
+                )
+                self.cache.put_uuid_rows(
+                    self.index, ns, self.uuid_field, wrapper_rows
+                )
+
+            # Cache empty sentinels for UUIDs with no data for this metric
+            fresh_uuids = {doc.get(self.uuid_field) for doc in fresh_docs}
+            empty_uuids = [u for u in metric_missing if u not in fresh_uuids
+                           and u not in cached_by_metric[mname]]
+            if empty_uuids:
+                self.logger.debug(
+                    "Caching %d empty-result UUIDs for get_results_batch metric %s",
+                    len(empty_uuids), mname,
+                )
+                self.cache.put_uuid_rows(
+                    self.index, ns, self.uuid_field,
+                    [{self.uuid_field: u, "_cached_empty": True} for u in empty_uuids],
+                )
+
+            # Merge cached docs with fresh docs
+            cached_docs = []
+            for wrapper in cached_by_metric[mname].values():
+                cached_docs.extend(wrapper.get("_docs", []))
+            merged[mname] = cached_docs + fresh_docs
+
+        return merged
 
     def convert_to_df(
         self, data: Dict[Any, Any],
@@ -738,6 +1002,18 @@ class Matcher:
             "correlation", "context", "acceptable_range",
         }
 
+        cache_key = QueryCache.make_key(
+            self.index, "discover_field_values", field,
+            sorted(uuids), metric,
+        )
+        cached = self.cache.get(cache_key)
+        if cached is not None:
+            self.logger.debug(
+                "Cache hit for discover_field_values field='%s'", field
+            )
+            return cached
+
+        self.logger.debug("Cache miss for discover_field_values field='%s'", field)
         must_clauses = [Q("terms", **{self.uuid_field + ".keyword": uuids})]
 
         for key, value in metric.items():
@@ -776,4 +1052,8 @@ class Matcher:
         buckets = result.aggregations.group_values.buckets
         values = sorted([bucket.key for bucket in buckets])
         self.logger.info("Discovered %d distinct values for field '%s'", len(values), field)
+        self.logger.debug("Cache store for discover_field_values field='%s': %d values", field, len(values))
+        self.cache.put(
+            cache_key, self.index, "discover_field_values", values
+        )
         return values
