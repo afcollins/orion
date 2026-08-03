@@ -216,7 +216,7 @@ def analyze(test, kwargs, is_pull=False):
         uuid_field=test["uuid_field"],
         cache=cache,
     )
-    utils = Utils(test["uuid_field"], test["version_field"])
+    utils = Utils(test["uuid_field"], test["version_field"], cache=cache)
     logger = SingletonLogger.get_logger("Orion")
     start_timestamp = get_start_timestamp(kwargs, test, is_pull)
     fingerprint_matched_df, metrics_config = utils.process_test(

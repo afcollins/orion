@@ -29,6 +29,7 @@ class Matcher:
 
     # Fallback for instances created via __new__ without calling __init__.
     cache = QueryCache(enabled=False)
+    metadata_context: Dict[str, Any] = {}
 
     # pylint: disable=too-many-arguments
     def __init__(
@@ -53,6 +54,15 @@ class Matcher:
         self.version_field = version_field
         self.uuid_field = uuid_field
         self.cache = cache if cache is not None else QueryCache()
+        self.metadata_context: Dict[str, Any] = {}
+
+    def set_metadata_context(self, metadata: Dict[str, Any]) -> None:
+        """Store the current test's metadata block for cache-key scoping.
+
+        Args:
+            metadata: metadata dict from the test config (platform, benchmark, etc.)
+        """
+        self.metadata_context = metadata
 
     def get_metadata_by_uuid(self, uuid: str) -> dict:
         """Returns back metadata when uuid is given
@@ -295,7 +305,7 @@ class Matcher:
             uuids.remove(uuid)
 
         cache_key = QueryCache.make_key(
-            self.index, "get_results", uuid,
+            self.index, "get_results", self.metadata_context, uuid,
             sorted(uuids), metrics, exists_fields, timestamp_field,
         )
         cached = self.cache.get(cache_key)
@@ -357,7 +367,7 @@ class Matcher:
             timestamp_field (str): timestamp field in data
 
         """
-        namespace = QueryCache.make_key(metrics, timestamp_field)
+        namespace = QueryCache.make_key(self.metadata_context, metrics, timestamp_field)
         cached = self.cache.get_uuid_rows(self.index, namespace, uuids)
         missing = [u for u in uuids if u not in cached]
 
@@ -502,7 +512,7 @@ class Matcher:
         namespaces: Dict[str, str] = {}
         all_missing: set = set()
         for metric in metrics_list:
-            ns = QueryCache.make_key(metric, timestamp_field)
+            ns = QueryCache.make_key(self.metadata_context, metric, timestamp_field)
             namespaces[metric["name"]] = ns
             metric_cached = self.cache.get_uuid_rows(
                 self.index, ns, uuids
@@ -682,7 +692,7 @@ class Matcher:
         all_missing: set = set()
         for metric in metrics_list:
             ns = QueryCache.make_key(
-                "get_results_batch", metric, timestamp_field
+                self.metadata_context, "get_results_batch", metric, timestamp_field
             )
             namespaces[metric["name"]] = ns
             metric_cached = self.cache.get_uuid_rows(

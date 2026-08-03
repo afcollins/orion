@@ -17,6 +17,7 @@ import pandas as pd
 import requests
 from tabulate import tabulate
 
+from orion.cache import QueryCache
 from orion.config import expand_group_by
 from orion.matcher import Matcher
 from orion.logger import SingletonLogger
@@ -28,16 +29,19 @@ class Utils:
     Helper utils class
     """
 
-    def __init__(self, uuid_field: str ="uuid", version_field: str ="ocpVersion"):
+    def __init__(self, uuid_field: str ="uuid", version_field: str ="ocpVersion",
+                 cache: QueryCache = None):
         """Instanciates utils class with uuid and version fields
 
         Args:
             uuid_field (str): key to find the uuid
             version_field (str): key to find the version
+            cache (QueryCache): optional cache for HTTP results
         """
         self.uuid_field = uuid_field
         self.version_field = version_field
         self.logger = SingletonLogger.get_logger("Orion")
+        self.cache = cache if cache is not None else QueryCache()
 
     # pylint: disable=too-many-locals
     def get_metric_data(
@@ -500,7 +504,9 @@ class Utils:
         buildUrls = {run[self.uuid_field]: run["buildUrl"] for run in test}
         return buildUrls
 
-    def map_prs_version(self, uuids: List[str], match: Matcher, ftimestamp: str="timestamp") -> Tuple[dict, Dict[str, List[str]]]:
+    def map_prs_version(self, uuids: List[str], match: Matcher,
+                        ftimestamp: str="timestamp",
+                        enabled: bool = True) -> Tuple[dict, Dict[str, List[str]]]:
         """
         Get list of PRs for OCP version and map it to UUID
 
@@ -508,6 +514,8 @@ class Utils:
             uuids (List): List uuids
             match (Matcher): the matcher object
             ftimestamp (str): timestamp field
+            enabled (bool): when False, skip sippy PR lookups and return
+                empty PR lists (versions are still fetched)
 
         Returns:
             A tuple of:
@@ -516,6 +524,8 @@ class Utils:
 
         """
         versions = self.get_version(uuids, match, ftimestamp)
+        if not enabled:
+            return (versions, {uuid: [] for uuid in uuids})
         return (versions, {uuid : self.sippy_pr_search(version) for uuid, version in versions.items()})
 
     def process_test(
@@ -551,6 +561,8 @@ class Utils:
             if options["uuid"] in ("", None)
             else self.get_metadata_with_uuid(options["uuid"], match)
         )
+        # scope all subsequent per-uuid cache keys to this test's metadata
+        match.set_metadata_context(metadata)
         # get uuids, buildUrls matching with the metadata
 
         # Parse since_date if provided
@@ -570,13 +582,16 @@ class Utils:
         )
         uuids = list(set(run[self.uuid_field] for run in runs))
         buildUrls = {run[self.uuid_field]: run["buildUrl"] for run in runs}
-        versions, prs = self.map_prs_version(uuids, match, timestamp_field)
+        sippy_enabled = options.get("sippy_pr_search", False)
+        versions, prs = self.map_prs_version(uuids, match, timestamp_field,
+                                             enabled=sippy_enabled)
         # get uuids if there is a baseline
         if options["baseline"] not in ("", None):
             uuids = [uuid for uuid in re.split(r" |,", options["baseline"]) if uuid]
             uuids.append(options["uuid"])
             buildUrls = self.get_build_urls(uuids, match, timestamp_field)
-            versions, prs = self.map_prs_version(uuids, match, timestamp_field)
+            versions, prs = self.map_prs_version(uuids, match, timestamp_field,
+                                                 enabled=sippy_enabled)
         elif not uuids:
             self.logger.info("No UUID present for given metadata")
             return None, None
@@ -766,6 +781,12 @@ class Utils:
         Returns:
             List[str]: list of PRs
         """
+        cache_key = QueryCache.make_key("sippy_pr_search", version)
+        cached = self.cache.get(cache_key)
+        if cached is not None:
+            self.logger.debug("Cache hit for sippy_pr_search version=%s", version)
+            return cached
+
         base_url = "https://sippy.dptools.openshift.org/api/releases/pull_requests"
         filter_dict = {
             "items": [
@@ -786,7 +807,9 @@ class Utils:
         if response.status_code != 200:
             self.logger.debug("Failed to search for PRs in sippy for version %s", version)
             return []
-        return self.process_sippy_pr_list(response.json())
+        result = self.process_sippy_pr_list(response.json())
+        self.cache.put(cache_key, "sippy", "sippy_pr_search", result)
+        return result
 
 # pylint: disable=too-many-locals
 def json_to_junit(
