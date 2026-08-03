@@ -17,6 +17,7 @@ import pandas as pd
 
 # pylint: disable = import-error
 from orion.matcher import Matcher
+from orion.cache import QueryCache
 from orion.logger import SingletonLogger
 
 
@@ -100,7 +101,7 @@ def make_matcher_fixture(index, uuid_field="uuid", version_field=None):
         if version_field:
             kwargs["version_field"] = version_field
 
-        return Matcher(**kwargs)
+        return Matcher(**kwargs, cache=QueryCache(enabled=False))
 
 
 @pytest.fixture
@@ -698,3 +699,44 @@ def test_data_operations(matcher_instance, tmp_path, test_type):
         csv_file = tmp_path / "test_output.csv"
         matcher_instance.save_results(mock_df, csv_file_path=str(csv_file), columns=columns)
         assert os.path.isfile(csv_file)
+
+
+# ---- Cache integration tests ------------------------------------------------
+
+class TestGetMetadataByUuidCaching:
+    """Verify get_metadata_by_uuid caches results and skips ES on cache hit."""
+
+    def test_second_call_served_from_cache(self, tmp_path):
+        """Call get_metadata_by_uuid twice with the same uuid; assert ES is
+        only invoked once and both calls return the same result."""
+        cache = QueryCache(db_path=str(tmp_path / "cache.db"))
+        matcher = make_matcher_fixture(index="perf-scale-ci")
+        matcher.cache = cache
+
+        sample_response = Response(
+            search=Search(),
+            response={
+                "hits": {
+                    "hits": [
+                        {"_source": {"uuid": "test-uuid", "field1": "value1"}}
+                    ]
+                }
+            },
+        )
+
+        call_count = [0]
+
+        def counting_query_index(*args, **kwargs):  # pylint: disable=unused-argument
+            call_count[0] += 1
+            return sample_response
+
+        matcher.query_index = counting_query_index
+
+        result1 = matcher.get_metadata_by_uuid("test-uuid")
+        result2 = matcher.get_metadata_by_uuid("test-uuid")
+
+        assert result1 == {"uuid": "test-uuid", "field1": "value1"}
+        assert result2 == result1
+        assert call_count[0] == 1, (
+            f"Expected ES to be called once, but was called {call_count[0]} times"
+        )

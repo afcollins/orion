@@ -11,6 +11,7 @@ from opensearch_dsl import Search
 from opensearch_dsl.response import Response
 
 # Import shared fixtures and helpers from test_matcher
+from orion.cache import QueryCache
 from orion.tests.test_matcher import make_matcher_fixture
 
 
@@ -316,3 +317,92 @@ def test_percentile_agg_metric_query(request,
     with patch.object(Search, "execute", mock_execute):
         result = matcher.get_agg_metric_query(test_uuids, test_metrics)
     assert result == expected
+
+
+class TestAggMetricQueryCaching:
+    """Verify get_agg_metric_query uses per-uuid cache correctly."""
+
+    def test_partial_cache_hit_only_queries_missing_uuids(self, tmp_path):
+        """Call with [a, b] to populate cache, then call with [a, b, c].
+        Assert the second ES call only queries uuid 'c', not 'a' or 'b',
+        and the merged result contains rows for all three."""
+        cache = QueryCache(db_path=str(tmp_path / "cache.db"))
+        matcher = make_matcher_fixture(index="perf-scale-ci")
+        matcher.cache = cache
+
+        test_metrics = {
+            "name": "apiserverCPU",
+            "metricName": "containerCPU",
+            "labels.namespace": "openshift-kube-apiserver",
+            "metric_of_interest": "value",
+            "agg": {"value": "cpu", "agg_type": "avg"},
+        }
+
+        # First call: uuids [a, b] - both are cache misses
+        data_ab = {
+            "aggregations": {
+                "uuid": {
+                    "buckets": [
+                        {
+                            "key": "a",
+                            "time": {"value_as_string": "2024-02-09T12:00:00"},
+                            "value": {"value": 42},
+                        },
+                        {
+                            "key": "b",
+                            "time": {"value_as_string": "2024-02-09T13:00:00"},
+                            "value": {"value": 56},
+                        },
+                    ]
+                }
+            }
+        }
+
+        def mock_execute_ab(self):
+            return Response(response=data_ab, search=self)
+
+        with patch.object(Search, "execute", mock_execute_ab):
+            result_ab = matcher.get_agg_metric_query(["a", "b"], test_metrics)
+
+        assert len(result_ab) == 2
+
+        # Second call: uuids [a, b, c] - a and b should be cached,
+        # only c should be queried
+        data_c = {
+            "aggregations": {
+                "uuid": {
+                    "buckets": [
+                        {
+                            "key": "c",
+                            "time": {"value_as_string": "2024-02-09T14:00:00"},
+                            "value": {"value": 99},
+                        },
+                    ]
+                }
+            }
+        }
+
+        executed_searches = []
+
+        def mock_execute_c(self):
+            executed_searches.append(self.to_dict())
+            return Response(response=data_c, search=self)
+
+        with patch.object(Search, "execute", mock_execute_c):
+            result_abc = matcher.get_agg_metric_query(
+                ["a", "b", "c"], test_metrics
+            )
+
+        # The second ES call should only have uuid 'c' in its terms filter
+        assert len(executed_searches) == 1
+        search_dict = executed_searches[0]
+        terms_filter = search_dict["query"]["bool"]["must"][0]["terms"]
+        queried_uuids = terms_filter["uuid.keyword"]
+        assert queried_uuids == ["c"], (
+            f"Expected only ['c'] queried, got {queried_uuids}"
+        )
+
+        # Merged result should have all three uuids
+        assert len(result_abc) == 3
+        result_uuids = {row["uuid"] for row in result_abc}
+        assert result_uuids == {"a", "b", "c"}

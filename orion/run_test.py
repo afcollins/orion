@@ -5,6 +5,7 @@ import sys
 import copy
 import concurrent.futures
 from typing import Any, Dict, List, NamedTuple, Tuple
+from orion.cache import QueryCache
 from orion.matcher import Matcher
 from orion.logger import SingletonLogger
 from orion.algorithms import AlgorithmFactory
@@ -206,12 +207,14 @@ def analyze(test, kwargs, is_pull=False):
             (None, None) for PR paths with no data.
             Calls sys.exit(3) for non-PR paths with no data.
     """
+    cache = QueryCache(enabled=not kwargs.get("no_cache", False))
     matcher = Matcher(
         index=kwargs["metadata_index"] or test["metadata_index"],
         es_server=kwargs["es_server"],
         verify_certs=False,
         version_field=test["version_field"],
         uuid_field=test["uuid_field"],
+        cache=cache,
     )
     utils = Utils(test["uuid_field"], test["version_field"])
     logger = SingletonLogger.get_logger("Orion")

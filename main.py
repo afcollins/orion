@@ -486,6 +486,8 @@ def get_ack_providers(kwargs: dict, config: dict, logger) -> tuple[list[AckProvi
 @click.option("--collapse", is_flag=True, help="For text output: only print regression summary to stdout (full table always saved to file). For JSON output: only include changepoint context rows.")
 @click.option("--node-count", default=False, help="Match any node iterations count")
 @click.option("--lookback-size", type=int, default=10000, help="Maximum number of entries to be looked back")
+@click.option("--no-cache", is_flag=True, default=False, help="Bypass the local OpenSearch result cache for this run")
+@click.option("--clear-cache", is_flag=True, default=False, help="Delete the local OpenSearch result cache before running")
 @click.option("--es-server", type=str, envvar="ES_SERVER", help="Elasticsearch endpoint where test data is stored, can be set via env var ES_SERVER", default="")
 @click.option("--benchmark-index", type=str, envvar=["ES_BENCHMARK_INDEX", "es_benchmark_index"],  help="Index where test data is stored, can be set via env var ES_BENCHMARK_INDEX or es_benchmark_index", default="")
 @click.option("--metadata-index", type=str, envvar=["ES_METADATA_INDEX", "es_metadata_index"],  help="Index where metadata is stored, can be set via env var ES_METADATA_INDEX or es_metadata_index", default="")
@@ -629,6 +631,10 @@ def main(**kwargs):
             sys.exit(1)
         kwargs["pull_numbers"] = pull_numbers
         logger.info("PR analysis for pull numbers: %s", pull_numbers)
+    if kwargs.get("clear_cache"):
+        from orion.cache import QueryCache  # pylint: disable=import-outside-toplevel
+        QueryCache().clear()
+        logger.info("Local OpenSearch result cache cleared")
     results, results_pull, analyses_by_pr = run(**kwargs)
     is_pull = bool(results_pull.analyses)
 
