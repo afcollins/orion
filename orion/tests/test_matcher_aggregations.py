@@ -316,3 +316,100 @@ def test_percentile_agg_metric_query(request,
     with patch.object(Search, "execute", mock_execute):
         result = matcher.get_agg_metric_query(test_uuids, test_metrics)
     assert result == expected
+
+
+EXTENDED_STATS_RESPONSE = {
+    "count": 100, "min": 1.0, "max": 200.0, "avg": 50.5, "sum": 5050.0,
+    "sum_of_squares": 350000.0,
+    "variance": 833.25, "variance_population": 833.25, "variance_sampling": 841.67,
+    "std_deviation": 28.87, "std_deviation_population": 28.87, "std_deviation_sampling": 29.01,
+    "std_deviation_bounds": {"upper": 108.24, "lower": -7.24,
+                             "upper_population": 108.24, "lower_population": -7.24,
+                             "upper_sampling": 108.52, "lower_sampling": -7.52},
+}
+
+
+def _extended_stats_buckets(field, uuid_field="uuid"):
+    return {
+        "aggregations": {
+            "uuid": {
+                "buckets": [
+                    {
+                        "key": "uuid1",
+                        "time": {"value_as_string": "2024-02-09T12:00:00"},
+                        field: EXTENDED_STATS_RESPONSE,
+                    },
+                    {
+                        "key": "uuid2",
+                        "time": {"value_as_string": "2024-02-09T13:00:00"},
+                        field: EXTENDED_STATS_RESPONSE,
+                    },
+                ]
+            },
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "fixture_name,test_uuids,test_metrics,data_dict,expected",
+    [
+        (
+            "matcher_instance",
+            ["uuid1", "uuid2"],
+            {
+                "name": "cpuStdDev",
+                "metricName": "containerCPU",
+                "metric_of_interest": "value",
+                "agg": {"value": "cpu", "agg_type": "std_deviation"},
+            },
+            _extended_stats_buckets("value"),
+            [
+                {"uuid": "uuid1", "timestamp": "2024-02-09T12:00:00", "value_std_deviation": 28.87},
+                {"uuid": "uuid2", "timestamp": "2024-02-09T13:00:00", "value_std_deviation": 28.87},
+            ],
+        ),
+        (
+            "matcher_instance",
+            ["uuid1", "uuid2"],
+            {
+                "name": "cpuVariance",
+                "metricName": "containerCPU",
+                "metric_of_interest": "value",
+                "agg": {"value": "cpu", "agg_type": "variance"},
+            },
+            _extended_stats_buckets("value"),
+            [
+                {"uuid": "uuid1", "timestamp": "2024-02-09T12:00:00", "value_variance": 833.25},
+                {"uuid": "uuid2", "timestamp": "2024-02-09T13:00:00", "value_variance": 833.25},
+            ],
+        ),
+        (
+            "uuid_matcher_instance",
+            ["uuid1", "uuid2"],
+            {
+                "name": "latencyStdDev",
+                "metricName": "latency",
+                "metric_of_interest": "value_ms",
+                "agg": {"value": "value_ms", "agg_type": "std_deviation_sampling"},
+            },
+            _extended_stats_buckets("value_ms"),
+            [
+                {"run_uuid": "uuid1", "timestamp": "2024-02-09T12:00:00", "value_ms_std_deviation_sampling": 29.01},
+                {"run_uuid": "uuid2", "timestamp": "2024-02-09T13:00:00", "value_ms_std_deviation_sampling": 29.01},
+            ],
+        ),
+    ],
+)
+def test_extended_stats_agg_metric_query(request,
+                                         fixture_name,
+                                         test_uuids,
+                                         test_metrics,
+                                         data_dict,
+                                         expected):
+    """Test extended_stats-backed aggregation queries (std_deviation, variance, etc.)."""
+    matcher = request.getfixturevalue(fixture_name)
+    def mock_execute(self):
+        return Response(response=data_dict, search=self)
+    with patch.object(Search, "execute", mock_execute):
+        result = matcher.get_agg_metric_query(test_uuids, test_metrics)
+    assert result == expected

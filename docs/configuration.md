@@ -372,6 +372,13 @@ Orion supports aggregating metric values across multiple data points per test ru
 - `min` - Minimum value
 - `count` - Count of values (number of data points)
 - `percentiles` - Calculate percentile distributions (e.g., P50, P95, P99)
+- `std_deviation` - Standard deviation
+- `std_deviation_population` - Population standard deviation
+- `std_deviation_sampling` - Sampling standard deviation
+- `variance` - Variance
+- `variance_population` - Population variance
+- `variance_sampling` - Sampling variance
+- `sum_of_squares` - Sum of squares
 
 ### Standard Aggregation Examples
 
@@ -403,6 +410,37 @@ Orion supports aggregating metric values across multiple data points per test ru
 The `count` aggregation counts the number of values in the specified field, useful for tracking volume metrics like number of requests, events, or samples.
 
 **Other standard aggregations** (`sum`, `max`, `min`) follow the same pattern - just change `agg_type` to the desired aggregation.
+
+### Statistical Aggregations
+
+Statistical aggregations provide distribution metrics like standard deviation and variance. Use these when you need to understand the spread or variability of values across data points, not just the central tendency.
+
+**Standard deviation:**
+
+```yaml
+- name: kube-apiserver-cpu
+  metricName.keyword: containerCPU
+  labels.namespace.keyword: openshift-kube-apiserver
+  metric_of_interest: value
+  agg:
+    agg_type: std_deviation
+  threshold: 5
+  direction: 1
+```
+
+**Variance:**
+
+```yaml
+- name: api-response-latency
+  metricName: api_response_time
+  metric_of_interest: latency_ms
+  agg:
+    agg_type: variance
+  threshold: 10
+  direction: 1
+```
+
+All statistical aggregation types (`std_deviation`, `std_deviation_population`, `std_deviation_sampling`, `variance`, `variance_population`, `variance_sampling`, `sum_of_squares`) follow the same pattern — just change `agg_type`. No additional configuration fields are required. Valid values are those from OpenSearch `extended_stats` aggregation. Where there are duplicates, like `count` and `max`, the standalone aggregation is used.
 
 ### Percentile Aggregations
 
@@ -470,6 +508,8 @@ Percentile aggregations are particularly useful for analyzing latency distributi
 When using aggregations, the resulting metric name follows this pattern:
 - Standard aggregations: `<name>_<agg_type>`
   - Examples: `apiserverCPU_avg`, `memory_sum`, `latency_max`, `requests_count`
+- Statistical aggregations: `<name>_<agg_type>`
+  - Examples: `kube-apiserver-cpu_std_deviation`, `api-response-latency_variance`
 - Percentiles: `<name>_percentiles`
   - Example: `api_latency_percentiles`
 

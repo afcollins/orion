@@ -12,6 +12,11 @@ from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 from opensearch_dsl import Search, Q
 from orion.logger import SingletonLogger
 
+EXTENDED_STATS_FIELDS = frozenset({
+    "sum_of_squares",
+    "variance", "variance_population", "variance_sampling",
+    "std_deviation", "std_deviation_population", "std_deviation_sampling",
+})
 
 
 class Matcher:
@@ -370,10 +375,10 @@ class Matcher:
                 percents=percents
             )
         elif agg_type == "count":
-            # Count aggregation uses value_count in OpenSearch
             uuid_bucket.metric(metric_of_interest, "value_count", field=metrics["metric_of_interest"])
+        elif agg_type in EXTENDED_STATS_FIELDS:
+            uuid_bucket.metric(metric_of_interest, "extended_stats", field=metrics["metric_of_interest"])
         else:
-            # Standard aggregations (sum, avg, max, min)
             uuid_bucket.metric(metric_of_interest, agg_type, field=metrics["metric_of_interest"])
         result = search.execute()
         self.logger.info("Executing aggregated query for metric %s against index %s",
@@ -423,8 +428,10 @@ class Matcher:
                     for key, val in percentile_dict.items():
                         self.logger.info("percentile_values value %s", key)
                         data[metric_of_interest + "_" + agg_type + "_" + str(key)] = val
+            elif agg_type in EXTENDED_STATS_FIELDS:
+                stats_dict = uuid.get(metric_of_interest).to_dict()
+                data[value_key] = stats_dict[agg_type]
             else:
-                # Standard single-value aggregations
                 data[value_key] = uuid.get(metric_of_interest).value
             res.append(data)
         return res
@@ -492,6 +499,8 @@ class Matcher:
                 filtered_bucket.metric(field, "percentiles", field=field, percents=percents)
             elif agg_type == "count":
                 filtered_bucket.metric(field, "value_count", field=field)
+            elif agg_type in EXTENDED_STATS_FIELDS:
+                filtered_bucket.metric(field, "extended_stats", field=field)
             else:
                 filtered_bucket.metric(field, agg_type, field=field)
 
@@ -552,6 +561,10 @@ class Matcher:
                     else:
                         for k, v in pct_dict.items():
                             row[f"{field}_{agg_type}_{k}"] = v
+                elif agg_type in EXTENDED_STATS_FIELDS:
+                    col = f"{field}_{agg_type}"
+                    stats_dict = filtered[field].to_dict()
+                    row[col] = stats_dict[agg_type]
                 else:
                     col = f"{field}_{agg_type}"
                     row[col] = filtered[field].value
