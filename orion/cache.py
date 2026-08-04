@@ -8,11 +8,14 @@ Storage location respects XDG_DATA_HOME (default ~/.local/share/orion/cache.db).
 
 import hashlib
 import json
+import logging
 import os
 import sqlite3
 import threading
 import time
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("Orion")
 
 
 _SCHEMA_SQL = """\
@@ -114,7 +117,9 @@ class QueryCache:
             (cache_key,),
         ).fetchone()
         if row is None:
+            logger.debug("Cache miss (query_cache) key=%s…", cache_key[:12])
             return None
+        logger.debug("Cache hit  (query_cache) key=%s…", cache_key[:12])
         return json.loads(row[0])
 
     def put(
@@ -131,6 +136,7 @@ class QueryCache:
         if not self._enabled:
             return
         conn = self._conn()
+        logger.debug("Cache store (query_cache) key=%s… type=%s", cache_key[:12], query_type)
         conn.execute(
             "INSERT OR REPLACE INTO query_cache "
             "(cache_key, index_name, query_type, payload, created_at) "
@@ -166,6 +172,10 @@ class QueryCache:
             f"WHERE index_name = ? AND namespace = ? AND uuid IN ({placeholders})",
             [index, namespace, *uuids],
         ).fetchall()
+        logger.debug(
+            "Cache lookup (uuid_metric) ns=%s… requested=%d found=%d",
+            namespace[:12], len(uuids), len(rows),
+        )
         return {uuid: json.loads(payload) for uuid, payload in rows}
 
     def put_uuid_rows(
@@ -186,6 +196,7 @@ class QueryCache:
         if not self._enabled or not rows:
             return
         conn = self._conn()
+        stored = 0
         now = time.time()
         for row in rows:
             uuid = row.get(uuid_field)
@@ -197,7 +208,9 @@ class QueryCache:
                 "VALUES (?, ?, ?, ?, ?)",
                 (index, namespace, uuid, json.dumps(row), now),
             )
+            stored += 1
         conn.commit()
+        logger.debug("Cache store (uuid_metric) ns=%s… rows=%d", namespace[:12], stored)
 
     # ------------------------------------------------------------------
     # Maintenance

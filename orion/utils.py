@@ -786,6 +786,7 @@ class Utils:
         if cached is not None:
             self.logger.debug("Cache hit for sippy_pr_search version=%s", version)
             return cached
+        self.logger.debug("Cache miss for sippy_pr_search version=%s", version)
 
         base_url = "https://sippy.dptools.openshift.org/api/releases/pull_requests"
         filter_dict = {
@@ -808,6 +809,7 @@ class Utils:
             self.logger.debug("Failed to search for PRs in sippy for version %s", version)
             return []
         result = self.process_sippy_pr_list(response.json())
+        self.logger.debug("Cache store for sippy_pr_search version=%s: %d PRs", version, len(result))
         self.cache.put(cache_key, "sippy", "sippy_pr_search", result)
         return result
 

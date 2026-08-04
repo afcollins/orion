@@ -88,6 +88,7 @@ class Matcher:
         hits = res.hits.hits
         if hits:
             result = dict(hits[0].to_dict()["_source"])
+        self.logger.debug("Cache miss for get_metadata_by_uuid uuid=%s, storing result", uuid)
         self.cache.put(cache_key, self.index, "get_metadata_by_uuid", result)
         return result
 
@@ -349,6 +350,7 @@ class Matcher:
         )
         all_hits = self.query_index(search, return_all=True)
         runs = [hit.to_dict()["_source"] for hit in all_hits]
+        self.logger.debug("Cache miss for get_results uuid=%s, storing %d runs", uuid, len(runs))
         self.cache.put(
             cache_key, self.index, "get_results", runs
         )
@@ -379,6 +381,11 @@ class Matcher:
             )
             return list(cached.values())
 
+        self.logger.debug(
+            "Cache partial miss for get_agg_metric_query metric %s: "
+            "%d cached, %d missing of %d total",
+            metrics.get("name"), len(cached), len(missing), len(uuids),
+        )
         metric_queries = []
         not_queries = [
             ~Q("match", **{not_item_key: not_item_value})
@@ -436,6 +443,10 @@ class Matcher:
             metrics["name"], self.index)
         self.logger.debug("Executing query \r\n%s", search.to_dict())
         fresh_rows = self.parse_agg_results(result, agg_type, timestamp_field, metrics)
+        self.logger.debug(
+            "Cache store for get_agg_metric_query metric %s: %d fresh rows",
+            metrics.get("name"), len(fresh_rows),
+        )
         self.cache.put_uuid_rows(
             self.index, namespace, self.uuid_field, fresh_rows
         )
@@ -535,6 +546,12 @@ class Matcher:
                 for m in metrics_list
             }
 
+        self.logger.debug(
+            "Cache partial miss for get_agg_metrics_batch: "
+            "%d missing uuids of %d total across %d metrics",
+            len(missing), len(uuids), len(metrics_list),
+        )
+
         # --- existing ES query, scoped to missing uuids only ----------------
         query = Q(
             "bool",
@@ -602,6 +619,10 @@ class Matcher:
             ns = namespaces[mname]
             fresh_rows = fresh_by_metric.get(mname, [])
             if fresh_rows:
+                self.logger.debug(
+                    "Cache store for get_agg_metrics_batch metric %s: %d fresh rows",
+                    mname, len(fresh_rows),
+                )
                 self.cache.put_uuid_rows(
                     self.index, ns, self.uuid_field, fresh_rows
                 )
@@ -720,6 +741,12 @@ class Matcher:
                 results[mname] = docs
             return results
 
+        self.logger.debug(
+            "Cache partial miss for get_results_batch: "
+            "%d missing uuids of %d total across %d metrics",
+            len(missing), len(uuids), len(metrics_list),
+        )
+
         # --- existing ES query, scoped to missing uuids only ----------------
         excluded_keys = {"name", "metric_of_interest", "not", "type", "group_by"}
         filter_fields_by_metric = []
@@ -801,6 +828,10 @@ class Matcher:
                     {self.uuid_field: uid, "_docs": docs}
                     for uid, docs in by_uuid.items()
                 ]
+                self.logger.debug(
+                    "Cache store for get_results_batch metric %s: %d fresh docs across %d uuids",
+                    mname, len(fresh_docs), len(by_uuid),
+                )
                 self.cache.put_uuid_rows(
                     self.index, ns, self.uuid_field, wrapper_rows
                 )
@@ -918,6 +949,7 @@ class Matcher:
             )
             return cached
 
+        self.logger.debug("Cache miss for discover_field_values field='%s'", field)
         must_clauses = [Q("terms", **{self.uuid_field + ".keyword": uuids})]
 
         for key, value in metric.items():
@@ -956,6 +988,7 @@ class Matcher:
         buckets = result.aggregations.group_values.buckets
         values = sorted([bucket.key for bucket in buckets])
         self.logger.info("Discovered %d distinct values for field '%s'", len(values), field)
+        self.logger.debug("Cache store for discover_field_values field='%s': %d values", field, len(values))
         self.cache.put(
             cache_key, self.index, "discover_field_values", values
         )
