@@ -379,7 +379,7 @@ class Matcher:
                 "against index %s (%d uuids)",
                 metrics.get("name"), self.index, len(uuids),
             )
-            return list(cached.values())
+            return [v for v in cached.values() if not v.get("_cached_empty")]
 
         self.logger.debug(
             "Cache partial miss for get_agg_metric_query metric %s: "
@@ -450,7 +450,17 @@ class Matcher:
         self.cache.put_uuid_rows(
             self.index, namespace, self.uuid_field, fresh_rows
         )
-        return list(cached.values()) + fresh_rows
+        fresh_uuids = {row[self.uuid_field] for row in fresh_rows}
+        empty_uuids = [u for u in missing if u not in fresh_uuids]
+        if empty_uuids:
+            self.logger.debug(
+                "Caching %d empty-result UUIDs for get_agg_metric_query", len(empty_uuids)
+            )
+            self.cache.put_uuid_rows(
+                self.index, namespace, self.uuid_field,
+                [{self.uuid_field: u, "_cached_empty": True} for u in empty_uuids],
+            )
+        return [v for v in cached.values() if not v.get("_cached_empty")] + fresh_rows
 
     def parse_agg_results(
         self, data: Dict[Any, Any],
@@ -542,7 +552,8 @@ class Matcher:
                 len(metrics_list), len(uuids), self.index,
             )
             return {
-                m["name"]: list(cached_by_metric[m["name"]].values())
+                m["name"]: [v for v in cached_by_metric[m["name"]].values()
+                            if not v.get("_cached_empty")]
                 for m in metrics_list
             }
 
@@ -626,8 +637,22 @@ class Matcher:
                 self.cache.put_uuid_rows(
                     self.index, ns, self.uuid_field, fresh_rows
                 )
+            fresh_uuids = {row[self.uuid_field] for row in fresh_rows}
+            empty_uuids = [u for u in missing if u not in fresh_uuids
+                           and u not in cached_by_metric[mname]]
+            if empty_uuids:
+                self.logger.debug(
+                    "Caching %d empty-result UUIDs for get_agg_metrics_batch metric %s",
+                    len(empty_uuids), mname,
+                )
+                self.cache.put_uuid_rows(
+                    self.index, ns, self.uuid_field,
+                    [{self.uuid_field: u, "_cached_empty": True} for u in empty_uuids],
+                )
             merged[mname] = (
-                list(cached_by_metric[mname].values()) + fresh_rows
+                [v for v in cached_by_metric[mname].values()
+                 if not v.get("_cached_empty")]
+                + fresh_rows
             )
         return merged
 
@@ -834,6 +859,20 @@ class Matcher:
                 )
                 self.cache.put_uuid_rows(
                     self.index, ns, self.uuid_field, wrapper_rows
+                )
+
+            # Cache empty sentinels for UUIDs with no data for this metric
+            fresh_uuids = {doc.get(self.uuid_field) for doc in fresh_docs}
+            empty_uuids = [u for u in missing if u not in fresh_uuids
+                           and u not in cached_by_metric[mname]]
+            if empty_uuids:
+                self.logger.debug(
+                    "Caching %d empty-result UUIDs for get_results_batch metric %s",
+                    len(empty_uuids), mname,
+                )
+                self.cache.put_uuid_rows(
+                    self.index, ns, self.uuid_field,
+                    [{self.uuid_field: u, "_cached_empty": True} for u in empty_uuids],
                 )
 
             # Merge cached docs with fresh docs
