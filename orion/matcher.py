@@ -528,10 +528,10 @@ class Matcher:
         if not metrics_list:
             return {}
 
-        # --- cache: read per-metric cached rows, find union of missing uuids --
+        # --- cache: read per-metric cached rows, find per-metric missing uuids -
         cached_by_metric: Dict[str, Dict[str, Any]] = {}
         namespaces: Dict[str, str] = {}
-        all_missing: set = set()
+        missing_by_metric: Dict[str, set] = {}
         for metric in metrics_list:
             ns = QueryCache.make_key(self.metadata_context, metric, timestamp_field)
             namespaces[metric["name"]] = ns
@@ -539,13 +539,11 @@ class Matcher:
                 self.index, ns, uuids
             )
             cached_by_metric[metric["name"]] = metric_cached
-            for u in uuids:
-                if u not in metric_cached:
-                    all_missing.add(u)
+            metric_missing = {u for u in uuids if u not in metric_cached}
+            if metric_missing:
+                missing_by_metric[metric["name"]] = metric_missing
 
-        missing = sorted(all_missing)
-
-        if not missing:
+        if not missing_by_metric:
             self.logger.info(
                 "Full cache hit for get_agg_metrics_batch "
                 "(%d metrics, %d uuids) against index %s",
@@ -557,13 +555,19 @@ class Matcher:
                 for m in metrics_list
             }
 
+        all_missing: set = set()
+        for s in missing_by_metric.values():
+            all_missing |= s
+        missing = sorted(all_missing)
+        metrics_to_query = [m for m in metrics_list if m["name"] in missing_by_metric]
+
         self.logger.debug(
             "Cache partial miss for get_agg_metrics_batch: "
-            "%d missing uuids of %d total across %d metrics",
-            len(missing), len(uuids), len(metrics_list),
+            "%d missing uuids of %d total across %d of %d metrics",
+            len(missing), len(uuids), len(metrics_to_query), len(metrics_list),
         )
 
-        # --- existing ES query, scoped to missing uuids only ----------------
+        # --- ES query, scoped to missing uuids and uncached metrics only ----
         query = Q(
             "bool",
             must=[Q("terms", **{self.uuid_field + ".keyword": missing})],
@@ -581,7 +585,7 @@ class Matcher:
         )
         uuid_bucket.metric("time", "avg", field=timestamp_field)
 
-        for metric in metrics_list:
+        for metric in metrics_to_query:
             agg_name = metric["name"]
             agg_type = metric["agg"]["agg_type"]
             field = metric["metric_of_interest"]
@@ -613,14 +617,14 @@ class Matcher:
                 filtered_bucket.metric(field, agg_type, field=field)
 
         self.logger.info(
-            "Executing batched aggregation query for %d metrics against index %s",
-            len(metrics_list), self.index,
+            "Executing batched aggregation query for %d of %d metrics against index %s",
+            len(metrics_to_query), len(metrics_list), self.index,
         )
         self.logger.debug("Executing query \r\n%s", search.to_dict())
 
         result = search.execute()
         fresh_by_metric = self.parse_batch_agg_results(
-            result, metrics_list, timestamp_field
+            result, metrics_to_query, timestamp_field
         )
 
         # --- cache: store fresh rows and merge with cached --------------------
@@ -628,6 +632,11 @@ class Matcher:
         for metric in metrics_list:
             mname = metric["name"]
             ns = namespaces[mname]
+            if mname not in missing_by_metric:
+                merged[mname] = [v for v in cached_by_metric[mname].values()
+                                 if not v.get("_cached_empty")]
+                continue
+            metric_missing = missing_by_metric[mname]
             fresh_rows = fresh_by_metric.get(mname, [])
             if fresh_rows:
                 self.logger.debug(
@@ -638,7 +647,7 @@ class Matcher:
                     self.index, ns, self.uuid_field, fresh_rows
                 )
             fresh_uuids = {row[self.uuid_field] for row in fresh_rows}
-            empty_uuids = [u for u in missing if u not in fresh_uuids
+            empty_uuids = [u for u in metric_missing if u not in fresh_uuids
                            and u not in cached_by_metric[mname]]
             if empty_uuids:
                 self.logger.debug(
@@ -731,11 +740,11 @@ class Matcher:
         if not metrics_list:
             return {}
 
-        # --- cache: read per-metric cached rows, find union of missing uuids --
+        # --- cache: read per-metric cached rows, find per-metric missing uuids -
         # Each cached value is a wrapper dict {uuid_field: uuid, "_docs": [...]}.
         cached_by_metric: Dict[str, Dict[str, Any]] = {}
         namespaces: Dict[str, str] = {}
-        all_missing: set = set()
+        missing_by_metric: Dict[str, set] = {}
         for metric in metrics_list:
             ns = QueryCache.make_key(
                 self.metadata_context, "get_results_batch", metric, timestamp_field
@@ -745,13 +754,11 @@ class Matcher:
                 self.index, ns, uuids
             )
             cached_by_metric[metric["name"]] = metric_cached
-            for u in uuids:
-                if u not in metric_cached:
-                    all_missing.add(u)
+            metric_missing = {u for u in uuids if u not in metric_cached}
+            if metric_missing:
+                missing_by_metric[metric["name"]] = metric_missing
 
-        missing = sorted(all_missing)
-
-        if not missing:
+        if not missing_by_metric:
             self.logger.info(
                 "Full cache hit for get_results_batch "
                 "(%d metrics, %d uuids) against index %s",
@@ -766,17 +773,23 @@ class Matcher:
                 results[mname] = docs
             return results
 
+        all_missing: set = set()
+        for s in missing_by_metric.values():
+            all_missing |= s
+        missing = sorted(all_missing)
+        metrics_to_query = [m for m in metrics_list if m["name"] in missing_by_metric]
+
         self.logger.debug(
             "Cache partial miss for get_results_batch: "
-            "%d missing uuids of %d total across %d metrics",
-            len(missing), len(uuids), len(metrics_list),
+            "%d missing uuids of %d total across %d of %d metrics",
+            len(missing), len(uuids), len(metrics_to_query), len(metrics_list),
         )
 
-        # --- existing ES query, scoped to missing uuids only ----------------
+        # --- ES query, scoped to missing uuids and uncached metrics only ----
         excluded_keys = {"name", "metric_of_interest", "not", "type", "group_by"}
         filter_fields_by_metric = []
         should_clauses = []
-        for metric in metrics_list:
+        for metric in metrics_to_query:
             match_fields = {
                 k: v for k, v in metric.items()
                 if k not in excluded_keys
@@ -804,15 +817,15 @@ class Matcher:
         )
 
         self.logger.info(
-            "Executing batched standard query for %d metrics against index %s",
-            len(metrics_list), self.index,
+            "Executing batched standard query for %d of %d metrics against index %s",
+            len(metrics_to_query), len(metrics_list), self.index,
         )
 
         all_hits = self.query_index(search, return_all=True)
         runs = [hit.to_dict()["_source"] for hit in all_hits]
 
         fresh_results: Dict[str, List[Dict[Any, Any]]] = {
-            m["name"]: [] for m in metrics_list
+            m["name"]: [] for m in metrics_to_query
         }
         for doc in runs:
             matched = False
@@ -840,6 +853,15 @@ class Matcher:
         for metric in metrics_list:
             mname = metric["name"]
             ns = namespaces[mname]
+
+            if mname not in missing_by_metric:
+                cached_docs = []
+                for wrapper in cached_by_metric[mname].values():
+                    cached_docs.extend(wrapper.get("_docs", []))
+                merged[mname] = cached_docs
+                continue
+
+            metric_missing = missing_by_metric[mname]
             fresh_docs = fresh_results.get(mname, [])
 
             # Group fresh docs by uuid for per-uuid caching
@@ -863,7 +885,7 @@ class Matcher:
 
             # Cache empty sentinels for UUIDs with no data for this metric
             fresh_uuids = {doc.get(self.uuid_field) for doc in fresh_docs}
-            empty_uuids = [u for u in missing if u not in fresh_uuids
+            empty_uuids = [u for u in metric_missing if u not in fresh_uuids
                            and u not in cached_by_metric[mname]]
             if empty_uuids:
                 self.logger.debug(
