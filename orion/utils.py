@@ -545,43 +545,66 @@ class Utils:
         timestamp_field = "timestamp"
         if "timestamp" in test:
             timestamp_field=test["timestamp"]
-        # getting metadata
-        metadata = (
-            self.extract_metadata_from_test(test)
-            if options["uuid"] in ("", None)
-            else self.get_metadata_with_uuid(options["uuid"], match)
-        )
-        # get uuids, buildUrls matching with the metadata
+        # Resolve UUIDs from build tags or explicit UUIDs
+        build_tags = list(options.get("build_tags") or ())
+        explicit_uuids = [u for u in re.split(r"[, ]+", options.get("uuid", "") or "") if u]
 
-        # Parse since_date if provided
-        since_date = None
-        if options.get("since") and options["since"] != "":
-            try:
-                since_date = datetime.strptime(options["since"], "%Y-%m-%d")
-            except ValueError:
-                self.logger.warning("Invalid since date format: %s. Expected YYYY-MM-DD", options["since"])
-        runs = match.get_uuid_by_metadata(
-            metadata,
-            lookback_date=start_timestamp,
-            lookback_size=options["lookback_size"],
-            timestamp_field=timestamp_field,
-            additional_fields=options.get("display", []),
-            since_date=since_date
-        )
-        uuids = list(set(run[self.uuid_field] for run in runs))
-        buildUrls = {run[self.uuid_field]: run["buildUrl"] for run in runs}
-        versions, prs = self.map_prs_version(uuids, match, timestamp_field)
-        # get uuids if there is a baseline
-        if options["baseline"] not in ("", None):
-            uuids = [uuid for uuid in re.split(r" |,", options["baseline"]) if uuid]
-            uuids.append(options["uuid"])
-            buildUrls = self.get_build_urls(uuids, match, timestamp_field)
+        if build_tags or explicit_uuids:
+            runs = []
+            if build_tags:
+                self.logger.info("Resolving UUIDs for buildTag(s): %s", build_tags)
+                runs.extend(match.get_uuids_by_build_tags(
+                    build_tags,
+                    additional_fields=options.get("display", []),
+                ))
+            if explicit_uuids:
+                self.logger.info("Fetching metadata for UUID(s): %s", explicit_uuids)
+                runs.extend(match.get_metadata_by_uuids(
+                    explicit_uuids,
+                    additional_fields=options.get("display", []),
+                ))
+            uuids = list(set(run[self.uuid_field] for run in runs))
+            buildUrls = {run[self.uuid_field]: run["buildUrl"] for run in runs}
             versions, prs = self.map_prs_version(uuids, match, timestamp_field)
-        elif not uuids:
-            self.logger.info("No UUID present for given metadata")
+        else:
+            # getting metadata
+            metadata = self.extract_metadata_from_test(test)
+            # Parse since_date if provided
+            since_date = None
+            if options.get("since") and options["since"] != "":
+                try:
+                    since_date = datetime.strptime(options["since"], "%Y-%m-%d")
+                except ValueError:
+                    self.logger.warning("Invalid since date format: %s. Expected YYYY-MM-DD", options["since"])
+            runs = match.get_uuid_by_metadata(
+                metadata,
+                lookback_date=start_timestamp,
+                lookback_size=options["lookback_size"],
+                timestamp_field=timestamp_field,
+                additional_fields=options.get("display", []),
+                since_date=since_date
+            )
+            uuids = list(set(run[self.uuid_field] for run in runs))
+            buildUrls = {run[self.uuid_field]: run["buildUrl"] for run in runs}
+            versions, prs = self.map_prs_version(uuids, match, timestamp_field)
+            # get uuids if there is a baseline
+            if options["baseline"] not in ("", None):
+                uuids = [uuid for uuid in re.split(r" |,", options["baseline"]) if uuid]
+                uuids.extend(explicit_uuids)
+                buildUrls = self.get_build_urls(uuids, match, timestamp_field)
+                versions, prs = self.map_prs_version(uuids, match, timestamp_field)
+
+        if not uuids:
+            if build_tags:
+                self.logger.info("No UUIDs found for buildTag(s): %s", build_tags)
+            elif explicit_uuids:
+                self.logger.info("No matching data for provided UUID(s): %s", explicit_uuids)
+            else:
+                self.logger.info("No UUID present for given metadata")
             return None, None
         match.index = options.get("benchmark_index") or test.get("benchmark_index")
 
+        metadata = self.extract_metadata_from_test(test) if "metadata" in test else {}
         uuids = self.filter_uuids_on_index(
             metadata,
             options["benchmark_index"],

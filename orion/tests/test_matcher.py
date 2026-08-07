@@ -698,3 +698,91 @@ def test_data_operations(matcher_instance, tmp_path, test_type):
         csv_file = tmp_path / "test_output.csv"
         matcher_instance.save_results(mock_df, csv_file_path=str(csv_file), columns=columns)
         assert os.path.isfile(csv_file)
+
+
+class TestGetUuidsByBuildTags:
+    """Tests for Matcher.get_uuids_by_build_tags"""
+
+    def _make_hit(self, source, sort_val=100):
+        return {"_source": source, "sort": [sort_val]}
+
+    def test_single_build_tag(self, matcher_instance):
+        hits = [
+            self._make_hit({"uuid": "uuid1", "buildUrl": "url1", "ocpVersion": "4.15", "buildTag": "tag-abc"}, 200),
+            self._make_hit({"uuid": "uuid2", "buildUrl": "url2", "ocpVersion": "4.15", "buildTag": "tag-abc"}, 100),
+        ]
+        mock_execute, _ = make_paginated_execute([hits])
+        with patch.object(Search, "execute", mock_execute):
+            result = matcher_instance.get_uuids_by_build_tags(["tag-abc"])
+        assert len(result) == 2
+        assert result[0]["uuid"] == "uuid1"
+        assert result[1]["uuid"] == "uuid2"
+        assert result[0]["buildUrl"] == "url1"
+
+    def test_multiple_build_tags(self, matcher_instance):
+        hits = [
+            self._make_hit({"uuid": "uuid1", "buildUrl": "url1", "ocpVersion": "4.15", "buildTag": "tag-a"}, 200),
+            self._make_hit({"uuid": "uuid2", "buildUrl": "url2", "ocpVersion": "4.16", "buildTag": "tag-b"}, 100),
+        ]
+        mock_execute, _ = make_paginated_execute([hits])
+        with patch.object(Search, "execute", mock_execute):
+            result = matcher_instance.get_uuids_by_build_tags(["tag-a", "tag-b"])
+        assert len(result) == 2
+
+    def test_no_results(self, matcher_instance):
+        mock_execute, _ = make_paginated_execute([[]])
+        with patch.object(Search, "execute", mock_execute):
+            result = matcher_instance.get_uuids_by_build_tags(["nonexistent"])
+        assert result == []
+
+    def test_additional_fields(self, matcher_instance):
+        hits = [
+            self._make_hit({"uuid": "uuid1", "buildUrl": "url1", "ocpVersion": "4.15", "platform": "AWS"}),
+        ]
+        mock_execute, _ = make_paginated_execute([hits])
+        with patch.object(Search, "execute", mock_execute):
+            result = matcher_instance.get_uuids_by_build_tags(["tag"], additional_fields=["platform"])
+        assert result[0]["platform"] == "AWS"
+
+    def test_build_url_fallback(self, matcher_instance):
+        hits = [
+            self._make_hit({"uuid": "uuid1", "build_url": "fallback-url", "ocpVersion": "4.15"}),
+        ]
+        mock_execute, _ = make_paginated_execute([hits])
+        with patch.object(Search, "execute", mock_execute):
+            result = matcher_instance.get_uuids_by_build_tags(["tag"])
+        assert result[0]["buildUrl"] == "fallback-url"
+
+
+class TestGetMetadataByUuids:
+    """Tests for Matcher.get_metadata_by_uuids"""
+
+    def _make_hit(self, source, sort_val=100):
+        return {"_source": source, "sort": [sort_val]}
+
+    def test_multiple_uuids(self, matcher_instance):
+        hits = [
+            self._make_hit({"uuid": "uuid1", "buildUrl": "url1", "ocpVersion": "4.15"}, 200),
+            self._make_hit({"uuid": "uuid2", "buildUrl": "url2", "ocpVersion": "4.16"}, 100),
+        ]
+        mock_execute, _ = make_paginated_execute([hits])
+        with patch.object(Search, "execute", mock_execute):
+            result = matcher_instance.get_metadata_by_uuids(["uuid1", "uuid2"])
+        assert len(result) == 2
+        assert result[0]["uuid"] == "uuid1"
+        assert result[1]["uuid"] == "uuid2"
+
+    def test_no_results(self, matcher_instance):
+        mock_execute, _ = make_paginated_execute([[]])
+        with patch.object(Search, "execute", mock_execute):
+            result = matcher_instance.get_metadata_by_uuids(["nonexistent"])
+        assert result == []
+
+    def test_no_build_url(self, matcher_instance):
+        hits = [
+            self._make_hit({"uuid": "uuid1", "ocpVersion": "4.15"}),
+        ]
+        mock_execute, _ = make_paginated_execute([hits])
+        with patch.object(Search, "execute", mock_execute):
+            result = matcher_instance.get_metadata_by_uuids(["uuid1"])
+        assert result[0]["buildUrl"] == "http://bogus-url"

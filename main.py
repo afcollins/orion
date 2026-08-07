@@ -486,7 +486,8 @@ ALGORITHM_FLAGS = ["hunter_analyze", "cmr", "anomaly_detection", "orig_analyze"]
 )
 @click.option("--save-output-path", default="output.txt", help="path to save output file with regressions")
 @click.option("--column-group-size", type=int, default=5, help="Number of metrics per column group in text report")
-@click.option("--uuid", default="", help="UUID to use as base for comparisons")
+@click.option("--uuid", default="", help="UUID(s) to use as base for comparisons (comma-separated or repeat flag)")
+@click.option("--build-tag", "build_tags", multiple=True, help="buildTag(s) to resolve all UUIDs for a run (repeatable)")
 @click.option(
     "--baseline", default="", help="Baseline UUID(s) to to compare against uuid"
 )
