@@ -2,5 +2,5 @@ metricsFile: metrics.yaml
 tests:
   - name: whole-run
     metadata:
-      platform: AWS
+      platform: IBMCloud
 
